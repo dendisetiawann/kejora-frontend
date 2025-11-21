@@ -10,10 +10,10 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          dark: '#1F3D2B',
-          DEFAULT: '#3FA372',
-          light: '#DCFCE7',
-          accent: '#6ED3A5',
+          dark: '#111827', // Rich Black
+          DEFAULT: '#374151', // Professional Slate
+          light: '#F5F8FA', // Cool Off-White
+          accent: '#D4AF37', // Premium Gold
         },
       },
     },

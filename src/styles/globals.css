@@ -8,6 +8,6 @@ body {
 }
 
 ::selection {
-  @apply bg-brand-accent text-white;
+  @apply bg-brand-accent text-brand-dark;
 }
 

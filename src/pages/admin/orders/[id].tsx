@@ -82,6 +82,11 @@ export default function OrderDetailPage() {
                 <p className="text-xs uppercase text-slate-400">Pelanggan</p>
                 <p className="text-lg font-semibold text-brand-dark mt-1">{order.customer_name}</p>
                 <p className="text-sm text-slate-500">Meja {order.table_number}</p>
+                {order.customer_note && (
+                  <p className="text-xs text-slate-500 mt-2">
+                    Catatan: <span className="italic">{order.customer_note}</span>
+                  </p>
+                )}
               </div>
               <div className="rounded-xl border border-slate-100 p-4">
                 <p className="text-xs uppercase text-slate-400">Metode Bayar</p>

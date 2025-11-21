@@ -61,6 +61,7 @@ export default function OrdersPage() {
                 <th className="py-3">ID</th>
                 <th>Nama</th>
                 <th>Meja</th>
+                <th>Catatan</th>
                 <th>Total</th>
                 <th>Metode</th>
                 <th>Status Bayar</th>
@@ -75,6 +76,7 @@ export default function OrdersPage() {
                   <td className="py-3 font-semibold text-brand-dark">{order.id}</td>
                   <td>{order.customer_name}</td>
                   <td>{order.table_number}</td>
+                  <td className="max-w-[200px] text-slate-500">{order.customer_note ?? '-'}</td>
                   <td className="font-semibold text-brand-accent">{formatCurrency(order.total_amount)}</td>
                   <td>{order.payment_method.toUpperCase()}</td>
                   <td>{order.payment_status}</td>
