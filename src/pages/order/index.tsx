@@ -519,7 +519,7 @@ export default function OrderPage() {
 
                       <div className="p-5 flex flex-col flex-1">
                         <div className="flex justify-between items-start gap-2 mb-2">
-                          <h3 className="font-bold text-lg text-brand-dark line-clamp-1 group-hover:text-brand-DEFAULT transition-colors" title={menu.name}>{menu.name}</h3>
+                          <h3 className="font-bold text-lg text-brand-dark line-clamp-1 transition-colors" title={menu.name}>{menu.name}</h3>
                           <span className="font-bold text-brand-DEFAULT whitespace-nowrap">{formatCurrency(menu.price)}</span>
                         </div>
 
@@ -528,7 +528,7 @@ export default function OrderPage() {
                         </p>
 
                         {/* Minimalist interaction hint */}
-                        <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between text-xs font-medium text-gray-400 group-hover:text-brand-DEFAULT transition-colors">
+                        <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between text-xs font-medium text-gray-400 transition-colors">
                           <span>Klik untuk detail</span>
                           <i className="fas fa-arrow-right opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-[-10px] group-hover:translate-x-0"></i>
                         </div>
@@ -564,9 +564,23 @@ export default function OrderPage() {
 
         {hasCartItems && (
           <div className="fixed inset-x-0 bottom-0 z-30 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] pb-6 pt-4">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3" onClick={handleOpenCart}>
-                <div className="relative h-12 w-12 rounded-full bg-brand-light flex items-center justify-center text-brand-dark cursor-pointer hover:bg-brand-accent/20 transition-colors">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative flex items-center justify-center h-14">
+
+              {/* Centered Pay Button */}
+              <button
+                type="button"
+                onClick={handleProceedToCheckout}
+                className="w-full sm:w-64 bg-brand-dark text-white font-bold py-3.5 px-6 rounded-full shadow-lg shadow-brand-DEFAULT/30 transition-all transform active:scale-95 flex items-center justify-center gap-2"
+              >
+                <span>Bayar Sekarang</span>
+              </button>
+
+              {/* Right-aligned Cart Icon */}
+              <div
+                className="absolute right-4 flex items-center justify-center cursor-pointer group"
+                onClick={handleOpenCart}
+              >
+                <div className="relative h-12 w-12 rounded-full bg-brand-light flex items-center justify-center text-brand-dark group-hover:bg-brand-accent/20 transition-colors">
                   <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6">
                     <path
                       d="M5 6h2l1.5 9h9L19 8H7"
@@ -580,19 +594,8 @@ export default function OrderPage() {
                     {cartCount > 99 ? '99+' : cartCount}
                   </span>
                 </div>
-                <div className="hidden sm:block cursor-pointer" onClick={handleOpenCart}>
-                  <p className="text-xs text-gray-500">Total Pembayaran</p>
-                  <p className="text-lg font-bold text-brand-dark">{formatCurrency(cartTotal)}</p>
-                </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleProceedToCheckout}
-                className="flex-1 sm:flex-none sm:w-64 bg-brand-DEFAULT hover:bg-brand-dark text-white font-bold py-3.5 px-6 rounded-full shadow-lg shadow-brand-DEFAULT/30 transition-all transform active:scale-95"
-              >
-                Checkout ({cartCount})
-              </button>
             </div>
           </div>
         )}
@@ -627,23 +630,23 @@ export default function OrderPage() {
                 </p>
 
                 <div className="mt-auto space-y-4">
-                  <div className="flex items-center justify-between bg-gray-50 rounded-lg p-2">
-                    <span className="text-sm font-medium text-gray-700 ml-2">Jumlah</span>
-                    <div className="flex items-center gap-3 bg-white rounded-md shadow-sm p-1">
+                  <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                    <span className="text-sm font-medium text-gray-700">Jumlah Pesanan</span>
+                    <div className="flex items-center gap-4">
                       <button
                         type="button"
                         onClick={() => setDetailQty((prev) => Math.max(1, prev - 1))}
-                        className="h-8 w-8 rounded flex items-center justify-center hover:bg-gray-100 text-brand-dark transition-colors"
+                        className="h-10 w-10 rounded-lg flex items-center justify-center bg-white border border-gray-200 text-brand-dark hover:bg-gray-50 transition-colors shadow-sm"
                       >
-                        <i className="fas fa-minus text-xs"></i>
+                        <i className="fas fa-minus text-sm"></i>
                       </button>
-                      <span className="w-8 text-center font-bold text-brand-dark">{detailQty}</span>
+                      <span className="w-8 text-center font-bold text-xl text-brand-dark">{detailQty}</span>
                       <button
                         type="button"
                         onClick={() => setDetailQty((prev) => prev + 1)}
-                        className="h-8 w-8 rounded flex items-center justify-center bg-brand-DEFAULT text-white hover:bg-brand-dark transition-colors"
+                        className="h-10 w-10 rounded-lg flex items-center justify-center bg-brand-dark text-white hover:bg-brand-DEFAULT transition-colors shadow-sm"
                       >
-                        <i className="fas fa-plus text-xs"></i>
+                        <i className="fas fa-plus text-sm"></i>
                       </button>
                     </div>
                   </div>
