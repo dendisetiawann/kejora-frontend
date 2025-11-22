@@ -2,10 +2,10 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency } from '@/lib/format';
 import { clearOrderSuccess, OrderSuccessPayload, readOrderSuccess } from '@/lib/orderSuccess';
-import { publicGet } from '@/lib/api';
+import { publicGet, publicPost } from '@/lib/api';
 import { Order } from '@/types/entities';
 
 const MERCHANT_ID = process.env.NEXT_PUBLIC_QRIS_MERCHANT_ID ?? '9988123';
@@ -16,6 +16,8 @@ export default function OrderSuccessPage() {
   const [checked, setChecked] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [gatewayOpened, setGatewayOpened] = useState(false);
+  const [markPaidState, setMarkPaidState] = useState<'idle' | 'loading' | 'completed'>('idle');
+  const receiptGeneratedRef = useRef(false);
 
   useEffect(() => {
     if (!payload) {
@@ -143,6 +145,78 @@ export default function OrderSuccessPage() {
   };
 
   useEffect(() => {
+    if (!payload || payload.paymentMethod !== 'cash') {
+      return;
+    }
+    if (receiptGeneratedRef.current) {
+      return;
+    }
+
+    const generateReceipt = async () => {
+      try {
+        const { jsPDF } = await import('jspdf');
+        const doc = new jsPDF();
+        const lineHeight = 8;
+        let y = 20;
+
+        doc.setFontSize(16);
+        doc.text('Kejora Café', 14, y);
+        y += lineHeight;
+        doc.setFontSize(10);
+        doc.text('Bukti Pemesanan Pembayaran Tunai', 14, y);
+        y += lineHeight * 2;
+
+        const summary = [
+          `Nomor Pesanan : ${payload.orderCode}`,
+          `Nama Pelanggan : ${payload.customerName}`,
+          `Nomor Meja : ${payload.tableNumber}`,
+          `Metode : Tunai di kasir`,
+          `Total : ${formatCurrency(payload.total)}`,
+          `Waktu : ${new Date(payload.createdAt).toLocaleString('id-ID', {
+            dateStyle: 'full',
+            timeStyle: 'short',
+          })}`,
+        ];
+
+        summary.forEach((text) => {
+          doc.text(text, 14, y);
+          y += lineHeight;
+        });
+
+        y += lineHeight;
+        doc.setFontSize(12);
+        doc.text('Rincian Item', 14, y);
+        y += lineHeight;
+        doc.setFontSize(10);
+
+        payload.items.forEach((item) => {
+          if (y > 270) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.text(`${item.qty}x ${item.name} @ ${formatCurrency(item.price)} = ${formatCurrency(item.qty * item.price)}`, 14, y);
+          y += lineHeight;
+          if (item.note) {
+            doc.text(`Catatan: ${item.note}`, 18, y);
+            y += lineHeight;
+          }
+        });
+
+        y += lineHeight;
+        doc.setFontSize(10);
+        doc.text('Tunjukkan struk ini ke kasir untuk menyelesaikan pembayaran.', 14, y);
+
+        doc.save(`KejoraCash-${payload.orderCode}.pdf`);
+        receiptGeneratedRef.current = true;
+      } catch (error) {
+        console.error('Gagal membuat struk PDF', error);
+      }
+    };
+
+    generateReceipt();
+  }, [payload]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
@@ -156,6 +230,62 @@ export default function OrderSuccessPage() {
     window.open(payload.snapToken, '_blank');
     setGatewayOpened(true);
   }, [payload, gatewayOpened]);
+
+  const statusParam = router.query.status;
+  const statusQuery = Array.isArray(statusParam) ? statusParam[0] : statusParam;
+  const paymentCleared = payload?.paymentStatus === 'dibayar' || ['diproses', 'selesai'].includes(payload?.orderStatus ?? '');
+  const isQris = payload?.paymentMethod === 'qris';
+  const isQrisPaymentSuccess = Boolean(
+    isQris &&
+    (statusQuery?.toLowerCase() === 'success' || paymentCleared)
+  );
+  const shouldMarkPaidFallback = Boolean(
+    payload &&
+    isQris &&
+    statusQuery?.toLowerCase() === 'success' &&
+    !paymentCleared &&
+    markPaidState === 'idle'
+  );
+
+  useEffect(() => {
+    if (!shouldMarkPaidFallback || !payload) {
+      return;
+    }
+
+    let cancelled = false;
+    setMarkPaidState('loading');
+
+    const markPaid = async () => {
+      try {
+        const response = await publicPost<{ order: Order }>(`/public/orders/${payload.orderId}/mark-paid`);
+        if (cancelled) {
+          return;
+        }
+        setPayload((current) => {
+          if (!current) {
+            return current;
+          }
+          return {
+            ...current,
+            paymentStatus: response.order.payment_status,
+            orderStatus: response.order.order_status,
+          };
+        });
+      } catch (error) {
+        console.error('Gagal menandai pembayaran QRIS secara otomatis', error);
+      } finally {
+        if (!cancelled) {
+          setMarkPaidState('completed');
+        }
+      }
+    };
+
+    markPaid();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldMarkPaidFallback, payload]);
 
   if (!checked) {
     return (
@@ -175,12 +305,6 @@ export default function OrderSuccessPage() {
       </div>
     );
   }
-
-  const statusParam = router.query.status;
-  const statusQuery = Array.isArray(statusParam) ? statusParam[0] : statusParam;
-  const paymentCleared = payload.paymentStatus === 'dibayar' || ['diproses', 'selesai'].includes(payload.orderStatus ?? '');
-  const isQris = payload.paymentMethod === 'qris';
-  const isQrisPaymentSuccess = isQris && (statusQuery?.toLowerCase() === 'success' || paymentCleared);
   const isCashPaymentSuccess = !isQris && paymentCleared;
   const statusText = isQris
     ? isQrisPaymentSuccess
@@ -307,73 +431,99 @@ export default function OrderSuccessPage() {
             </section>
           )}
 
-          <section className="bg-white rounded-2xl shadow p-6 space-y-4">
-            <div>
-              <p className="text-xs uppercase tracking-widest text-brand-accent">Timeline Pengalaman</p>
-              <h2 className="text-xl font-semibold text-brand-dark">Bagaimana transaksi ini berlangsung</h2>
-            </div>
-            <ol className="space-y-4 text-sm text-brand-dark">
-              <li className="rounded-2xl border border-slate-100 p-4">
-                <p className="font-semibold">1. Halaman konfirmasi pembayaran</p>
-                <p className="mt-1 text-slate-600">
-                  Sistem menampilkan QRIS dinamis lengkap dengan Merchant ID {MERCHANT_ID}, nomor pesanan {payload.orderCode}, total
-                  {` ${formatCurrency(payload.total)}`} dan batas waktu pembayaran sehingga pelanggan bisa langsung memindai kode.
-                </p>
-              </li>
-              <li className="rounded-2xl border border-slate-100 p-4">
-                <p className="font-semibold">2. Pemindaian kode QRIS</p>
-                <p className="mt-1 text-slate-600">
-                  {isQrisPaymentSuccess
-                    ? 'Pembayaran terverifikasi otomatis. Pesan “Pembayaran Berhasil” muncul tanpa perlu membuka halaman invoice.'
-                    : 'Setelah pelanggan memindai QRIS dari aplikasi pembayaran, sistem menunggu verifikasi otomatis dari mitra pembayaran.'}
-                </p>
-              </li>
-              <li className="rounded-2xl border border-slate-100 p-4">
-                <p className="font-semibold">3. Notifikasi dashboard admin</p>
-                <p className="mt-1 text-slate-600">
-                  Admin menerima popup “Pesanan Baru” yang berisi detail pelanggan dan status sehingga tim kasir bisa langsung menindaklanjuti.
-                </p>
-              </li>
-              <li className="rounded-2xl border border-slate-100 p-4">
-                <p className="font-semibold">4. Pengantaran hidangan</p>
-                <p className="mt-1 text-slate-600">{kitchenStatusText}</p>
-              </li>
-            </ol>
-          </section>
-
-          <section className="bg-white rounded-2xl shadow p-6 space-y-4">
-            <div>
-              <p className="text-xs uppercase tracking-widest text-brand-accent">Detail notifikasi admin</p>
-              <h2 className="text-xl font-semibold text-brand-dark">Data yang dikirim ke dashboard</h2>
-            </div>
-            <dl className="grid gap-4 sm:grid-cols-2">
-              {adminNotificationEntries.map((entry) => (
-                <div key={entry.label} className="rounded-2xl border border-slate-100 p-4">
-                  <dt className="text-xs uppercase tracking-widest text-slate-500">{entry.label}</dt>
-                  <dd className="mt-1 font-semibold text-brand-dark">{entry.value}</dd>
+          {isQris ? (
+            <>
+              <section className="bg-white rounded-2xl shadow p-6 space-y-4">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-brand-accent">Timeline Pengalaman</p>
+                  <h2 className="text-xl font-semibold text-brand-dark">Bagaimana transaksi ini berlangsung</h2>
                 </div>
-              ))}
-            </dl>
-          </section>
+                <ol className="space-y-4 text-sm text-brand-dark">
+                  <li className="rounded-2xl border border-slate-100 p-4">
+                    <p className="font-semibold">1. Halaman konfirmasi pembayaran</p>
+                    <p className="mt-1 text-slate-600">
+                      Sistem menampilkan QRIS dinamis lengkap dengan Merchant ID {MERCHANT_ID}, nomor pesanan {payload.orderCode}, total
+                      {` ${formatCurrency(payload.total)}`} dan batas waktu pembayaran sehingga pelanggan bisa langsung memindai kode.
+                    </p>
+                  </li>
+                  <li className="rounded-2xl border border-slate-100 p-4">
+                    <p className="font-semibold">2. Pemindaian kode QRIS</p>
+                    <p className="mt-1 text-slate-600">
+                      {isQrisPaymentSuccess
+                        ? 'Pembayaran terverifikasi otomatis. Pesan “Pembayaran Berhasil” muncul tanpa perlu membuka halaman invoice.'
+                        : 'Setelah pelanggan memindai QRIS dari aplikasi pembayaran, sistem menunggu verifikasi otomatis dari mitra pembayaran.'}
+                    </p>
+                  </li>
+                  <li className="rounded-2xl border border-slate-100 p-4">
+                    <p className="font-semibold">3. Notifikasi dashboard admin</p>
+                    <p className="mt-1 text-slate-600">
+                      Admin menerima popup “Pesanan Baru” yang berisi detail pelanggan dan status sehingga tim kasir bisa langsung menindaklanjuti.
+                    </p>
+                  </li>
+                  <li className="rounded-2xl border border-slate-100 p-4">
+                    <p className="font-semibold">4. Pengantaran hidangan</p>
+                    <p className="mt-1 text-slate-600">{kitchenStatusText}</p>
+                  </li>
+                </ol>
+              </section>
 
-          <section className="bg-white rounded-2xl shadow p-6 space-y-4">
-            <div>
-              <p className="text-xs uppercase tracking-widest text-brand-accent">Detail item</p>
-              <h2 className="text-xl font-semibold text-brand-dark">{payload.items.length} menu</h2>
-            </div>
-            <div className="space-y-4">
-              {payload.items.map((item, index) => (
-                <div key={`${item.menu_id}-${index}`} className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
-                  <div>
-                    <p className="font-semibold text-brand-dark">{item.name}</p>
-                    <p className="text-xs text-slate-500">Qty {item.qty} Ãƒâ€” {formatCurrency(item.price)}</p>
-                    {item.note && <p className="text-xs text-brand-accent mt-1">Catatan: {item.note}</p>}
-                  </div>
-                  <p className="font-semibold text-brand-accent">{formatCurrency(item.price * item.qty)}</p>
+              <section className="bg-white rounded-2xl shadow p-6 space-y-4">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-brand-accent">Detail notifikasi admin</p>
+                  <h2 className="text-xl font-semibold text-brand-dark">Data yang dikirim ke dashboard</h2>
                 </div>
-              ))}
-            </div>
-          </section>
+                <dl className="grid gap-4 sm:grid-cols-2">
+                  {adminNotificationEntries.map((entry) => (
+                    <div key={entry.label} className="rounded-2xl border border-slate-100 p-4">
+                      <dt className="text-xs uppercase tracking-widest text-slate-500">{entry.label}</dt>
+                      <dd className="mt-1 font-semibold text-brand-dark">{entry.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+
+              <section className="bg-white rounded-2xl shadow p-6 space-y-4">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-brand-accent">Detail item</p>
+                  <h2 className="text-xl font-semibold text-brand-dark">{payload.items.length} menu</h2>
+                </div>
+                <div className="space-y-4">
+                  {payload.items.map((item, index) => (
+                    <div key={`${item.menu_id}-${index}`} className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
+                      <div>
+                        <p className="font-semibold text-brand-dark">{item.name}</p>
+                        <p className="text-xs text-slate-500">Qty {item.qty} × {formatCurrency(item.price)}</p>
+                        {item.note && <p className="text-xs text-brand-accent mt-1">Catatan: {item.note}</p>}
+                      </div>
+                      <p className="font-semibold text-brand-accent">{formatCurrency(item.price * item.qty)}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </>
+          ) : (
+            <section className="bg-white rounded-2xl shadow p-6 space-y-4">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-brand-accent">Tata cara pembayaran kasir</p>
+                <h2 className="text-xl font-semibold text-brand-dark">Langkah pembayaran manual</h2>
+              </div>
+              <ol className="space-y-4 text-sm text-brand-dark list-decimal list-inside">
+                <li className="rounded-2xl border border-slate-100 p-4">
+                  Tunjukkan nomor pesanan <span className="font-semibold text-brand-accent">{payload.orderCode}</span> dan total pembayaran
+                  {` ${formatCurrency(payload.total)}`} kepada kasir.
+                </li>
+                <li className="rounded-2xl border border-slate-100 p-4">
+                  Lakukan pembayaran sesuai nominal yang tertera, lalu tunggu kasir memverifikasi transaksi.
+                </li>
+                <li className="rounded-2xl border border-slate-100 p-4">
+                  Setelah kasir menandai pesanan sebagai lunas, dapur otomatis mulai memproses hidangan kamu.
+                </li>
+                <li className="rounded-2xl border border-slate-100 p-4">
+                  Simpan struk sebagai bukti dan duduk kembali di meja {payload.tableNumber}; tim kami akan mengantar pesanan.
+                </li>
+              </ol>
+            </section>
+          )}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
@@ -383,9 +533,6 @@ export default function OrderSuccessPage() {
             >
               Kembali ke menu
             </button>
-            <p className="text-xs text-slate-500 text-center sm:text-right">
-              Dashboard administrator menerima notifikasi secara real-time sesuai skenario use-case.
-            </p>
           </div>
         </main>
       </div>
