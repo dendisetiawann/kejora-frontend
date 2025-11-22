@@ -6,9 +6,6 @@ import { formatCurrency } from '@/lib/format';
 import { Order } from '@/types/entities';
 import { extractErrorMessage } from '@/lib/errors';
 
-const orderStatusOptions: Order['order_status'][] = ['baru', 'diproses', 'selesai'];
-const paymentStatusOptions: Order['payment_status'][] = ['belum_bayar', 'pending', 'dibayar', 'gagal'];
-
 export default function OrderDetailPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -16,6 +13,7 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -26,151 +24,201 @@ export default function OrderDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const handleOrderStatusChange = async (status: Order['order_status']) => {
+  const handleProcessOrder = async () => {
     if (!order) return;
     setUpdating(true);
     try {
-      const response = await adminPut<{ order: Order }>(`/admin/orders/${order.id}/status`, {
-        order_status: status,
+      await adminPut<{ order: Order }>(`/admin/orders/${order.id}/status`, {
+        order_status: 'diproses',
       });
-      setOrder(response.order);
+
+      if (order.payment_method === 'cash') {
+        await adminPut<{ order: Order }>(`/admin/orders/${order.id}/payment-status`, {
+          payment_status: 'dibayar',
+        });
+      }
+
+      setSuccessMessage('Pesanan sedang diproses!');
+
+      const updatedOrder = await adminGet<Order>(`/admin/orders/${order.id}`);
+      setOrder(updatedOrder);
     } catch (err: unknown) {
-      setError(extractErrorMessage(err, 'Gagal memperbarui status pesanan.'));
+      setError(extractErrorMessage(err, 'Gagal memproses pesanan.'));
     } finally {
       setUpdating(false);
     }
   };
 
-  const handlePaymentStatusChange = async (status: Order['payment_status']) => {
+  const handleCompleteOrder = async () => {
     if (!order) return;
     setUpdating(true);
     try {
-      const response = await adminPut<{ order: Order }>(`/admin/orders/${order.id}/payment-status`, {
-        payment_status: status,
+      await adminPut<{ order: Order }>(`/admin/orders/${order.id}/status`, {
+        order_status: 'selesai',
       });
-      setOrder(response.order);
+      setSuccessMessage('Pesanan berhasil diselesaikan!');
+      setTimeout(() => {
+        router.push('/admin/orders?tab=history');
+      }, 1500);
     } catch (err: unknown) {
-      setError(extractErrorMessage(err, 'Gagal memperbarui status pembayaran.'));
-    } finally {
+      setError(extractErrorMessage(err, 'Gagal menyelesaikan pesanan.'));
       setUpdating(false);
     }
   };
 
   return (
-    <AdminLayout title={`Detail Pesanan #${Array.isArray(id) ? id[0] : id ?? ''}`}>
-      <div className="bg-white rounded-2xl shadow p-6 space-y-6">
-        {loading && <p className="text-sm text-slate-400">Memuat detail pesanan...</p>}
-        {error && <p className="text-sm text-red-600">{error}</p>}
+    <AdminLayout title={`Detail Pesanan`}>
+      <div className="max-w-4xl mx-auto space-y-6">
+        {successMessage && (
+          <div className="bg-green-50 border border-green-200 text-green-800 px-6 py-4 rounded-xl flex items-center gap-3 animate-fade-in-down">
+            <i className="fas fa-check-circle text-xl"></i>
+            <p className="font-medium">{successMessage}</p>
+          </div>
+        )}
+
+        {loading && <p className="text-center text-slate-400 py-12">Memuat detail pesanan...</p>}
+        {error && <p className="text-center text-red-600 py-12">{error}</p>}
+
         {order && (
           <>
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <p className="text-sm text-slate-500">ID Pesanan</p>
-                <h2 className="text-2xl font-bold text-brand-dark">#{order.id}</h2>
-                <p className="text-sm text-slate-500">
-                  Dibuat {order.created_at ? new Date(order.created_at).toLocaleString('id-ID') : '-'}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-slate-500">Total Pembayaran</p>
-                <p className="text-3xl font-semibold text-brand-accent">{formatCurrency(order.total_amount)}</p>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-xl border border-slate-100 p-4">
-                <p className="text-xs uppercase text-slate-400">Pelanggan</p>
-                <p className="text-lg font-semibold text-brand-dark mt-1">{order.customer_name}</p>
-                <p className="text-sm text-slate-500">Meja {order.table_number}</p>
-                {order.customer_note && (
-                  <p className="text-xs text-slate-500 mt-2">
-                    Catatan: <span className="italic">{order.customer_note}</span>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-gray-100 pb-6 mb-6">
+                <div>
+                  <div className="flex items-center gap-3 mb-1">
+                    <h2 className="text-3xl font-bold text-brand-dark">{order.order_number || `#${order.id}`}</h2>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${order.order_status === 'selesai' ? 'bg-green-100 text-green-800' :
+                        order.order_status === 'diproses' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-blue-100 text-blue-800'
+                      }`}>
+                      {order.order_status === 'selesai' ? 'Pesanan Selesai' :
+                        order.order_status === 'diproses' ? 'Pesanan Diproses' :
+                          'Pesanan Baru'}
+                    </span>
+                  </div>
+                  <p className="text-gray-500 flex items-center gap-2">
+                    <i className="far fa-clock"></i>
+                    {order.created_at ? new Date(order.created_at).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' }) : '-'}
                   </p>
-                )}
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500 mb-1">Total Pembayaran</p>
+                  <p className="text-4xl font-bold text-brand-accent">{formatCurrency(order.total_amount)}</p>
+                </div>
               </div>
-              <div className="rounded-xl border border-slate-100 p-4">
-                <p className="text-xs uppercase text-slate-400">Metode Bayar</p>
-                <p className="text-lg font-semibold text-brand-dark mt-1">{order.payment_method.toUpperCase()}</p>
-                <p className="text-sm text-slate-500">Status: {order.payment_status}</p>
-              </div>
-              <div className="rounded-xl border border-slate-100 p-4">
-                <p className="text-xs uppercase text-slate-400">Status Pesanan</p>
-                <p className="text-lg font-semibold text-brand-dark mt-1">{order.order_status}</p>
-                <p className="text-sm text-slate-500">
-                  Terakhir diperbarui {order.updated_at ? new Date(order.updated_at).toLocaleString('id-ID') : '-'}
-                </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-gray-50 p-4 rounded-xl">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Pelanggan</p>
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400">
+                      <i className="fas fa-user"></i>
+                    </div>
+                    <div>
+                      <p className="font-bold text-brand-dark">{order.customer_name}</p>
+                      <p className="text-sm text-gray-500">Meja {order.table_number}</p>
+                    </div>
+                  </div>
+                  {order.customer_note && (
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <p className="text-xs text-gray-500 italic">"{order.customer_note}"</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-xl">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Pembayaran</p>
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w- 10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400">
+                      <i className={`fas ${order.payment_method === 'cash' ? 'fa-money-bill-wave' : 'fa-qrcode'}`}></i>
+                    </div>
+                    <div>
+                      <p className="font-bold text-brand-dark uppercase">{order.payment_method}</p>
+                      <p className={`text-sm font-medium ${order.payment_status === 'dibayar' ? 'text-green-600' :
+                          order.payment_status === 'pending' ? 'text-yellow-600' :
+                            'text-red-600'
+                        }`}>
+                        {order.payment_status === 'dibayar' ? 'Lunas' :
+                          order.payment_status === 'pending' ? 'Menunggu Pembayaran' :
+                            'Belum Bayar'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-xl flex flex-col justify-center">
+                  {order.order_status === 'baru' && (
+                    <button
+                      onClick={handleProcessOrder}
+                      disabled={updating}
+                      className="w-full bg-brand-accent text-brand-dark py-3 rounded-lg font-bold hover:bg-yellow-500 transition-all shadow-lg shadow-brand-accent/20 flex items-center justify-center gap-2"
+                    >
+                      {updating ? (
+                        <span className="animate-spin"><i className="fas fa-spinner"></i></span>
+                      ) : (
+                        <i className="fas fa-play"></i>
+                      )}
+                      Proses Pesanan
+                    </button>
+                  )}
+
+                  {order.order_status === 'diproses' && (
+                    <button
+                      onClick={handleCompleteOrder}
+                      disabled={updating}
+                      className="w-full bg-brand-dark text-white py-3 rounded-lg font-bold hover:bg-brand-DEFAULT transition-all shadow-lg shadow-brand-dark/20 flex items-center justify-center gap-2"
+                    >
+                      {updating ? (
+                        <span className="animate-spin"><i className="fas fa-spinner"></i></span>
+                      ) : (
+                        <i className="fas fa-check"></i>
+                      )}
+                      Selesaikan Pesanan
+                    </button>
+                  )}
+
+                  {order.order_status === 'selesai' && (
+                    <div className="text-center text-gray-500 font-medium">
+                      <i className="fas fa-check-circle text-green-500 text-2xl mb-2 block"></i>
+                      Pesanan Selesai
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-100 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                <h3 className="font-bold text-brand-dark">Rincian Pesanan</h3>
+              </div>
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-slate-500">
+                <thead className="bg-gray-50 text-gray-500">
                   <tr>
-                    <th className="text-left px-4 py-2">Menu</th>
-                    <th className="text-left px-4 py-2">Qty</th>
-                    <th className="text-left px-4 py-2">Harga</th>
-                    <th className="text-left px-4 py-2">Subtotal</th>
-                    <th className="text-left px-4 py-2">Catatan</th>
+                    <th className="text-left px-6 py-3 font-medium">Menu</th>
+                    <th className="text-center px-6 py-3 font-medium">Qty</th>
+                    <th className="text-right px-6 py-3 font-medium">Harga Satuan</th>
+                    <th className="text-right px-6 py-3 font-medium">Subtotal</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-100">
                   {order.items?.map((item) => (
-                    <tr key={item.id} className="border-t border-slate-100">
-                      <td className="px-4 py-2 font-semibold text-brand-dark">{item.menu?.name ?? item.menu_id}</td>
-                      <td className="px-4 py-2">{item.qty}</td>
-                      <td className="px-4 py-2">{formatCurrency(item.price)}</td>
-                      <td className="px-4 py-2 font-semibold text-brand-accent">{formatCurrency(item.subtotal)}</td>
-                      <td className="px-4 py-2 text-slate-500">{item.note ?? '-'}</td>
+                    <tr key={item.id}>
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-brand-dark">{item.menu?.name ?? item.menu_id}</p>
+                        {item.note && <p className="text-xs text-gray-500 mt-1 italic">Catatan: {item.note}</p>}
+                      </td>
+                      <td className="px-6 py-4 text-center font-medium">{item.qty}</td>
+                      <td className="px-6 py-4 text-right text-gray-600">{formatCurrency(item.price)}</td>
+                      <td className="px-6 py-4 text-right font-bold text-brand-accent">{formatCurrency(item.subtotal)}</td>
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="bg-gray-50">
+                  <tr>
+                    <td colSpan={3} className="px-6 py-4 text-right font-bold text-gray-600">Total</td>
+                    <td className="px-6 py-4 text-right font-bold text-brand-dark text-lg">{formatCurrency(order.total_amount)}</td>
+                  </tr>
+                </tfoot>
               </table>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <p className="text-sm text-slate-500">Ubah Status Pesanan</p>
-                <div className="flex flex-wrap gap-2">
-                  {orderStatusOptions.map((status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => handleOrderStatusChange(status)}
-                      disabled={updating}
-                      className={`px-4 py-2 rounded-full text-sm font-semibold border transition ${
-                        order.order_status === status
-                          ? 'bg-brand-accent text-white border-brand-accent'
-                          : 'border-slate-200 text-slate-600 hover:border-brand-accent'
-                      }`}
-                    >
-                      {status}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {order.payment_method === 'cash' && (
-                <div className="space-y-2">
-                  <p className="text-sm text-slate-500">Ubah Status Pembayaran (Tunai)</p>
-                  <div className="flex flex-wrap gap-2">
-                    {paymentStatusOptions.map((status) => (
-                      <button
-                        key={status}
-                        type="button"
-                        onClick={() => handlePaymentStatusChange(status)}
-                        disabled={updating}
-                        className={`px-4 py-2 rounded-full text-sm font-semibold border transition ${
-                          order.payment_status === status
-                            ? 'bg-brand-dark text-white border-brand-dark'
-                            : 'border-slate-200 text-slate-600 hover:border-brand-dark'
-                        }`}
-                      >
-                        {status}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </>
         )}
@@ -178,4 +226,3 @@ export default function OrderDetailPage() {
     </AdminLayout>
   );
 }
-

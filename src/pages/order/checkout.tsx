@@ -114,7 +114,7 @@ export default function OrderCheckoutPage() {
       const createdAt = response.order.created_at ?? new Date().toISOString();
       saveOrderSuccess({
         orderId: response.order.id,
-        orderCode: response.order.midtrans_order_id ?? `ORD-${response.order.id}`,
+        orderCode: response.order.order_number || response.order.midtrans_order_id || `ORD-${response.order.id}`,
         customerName: draft.customerName,
         tableNumber: draft.tableNumber,
         paymentMethod,
@@ -237,11 +237,10 @@ export default function OrderCheckoutPage() {
                   {(['cash', 'qris'] as PaymentMethod[]).map((method) => (
                     <label
                       key={method}
-                      className={`rounded-2xl border px-4 py-4 cursor-pointer transition ${
-                        paymentMethod === method
-                          ? 'border-brand-accent bg-brand-accent/10 text-brand-accent font-semibold shadow'
-                          : 'border-brand-light/70 text-brand-dark/70 hover:border-brand-accent/60'
-                      }`}
+                      className={`rounded-2xl border px-4 py-4 cursor-pointer transition ${paymentMethod === method
+                        ? 'border-brand-accent bg-brand-accent/10 text-brand-accent font-semibold shadow'
+                        : 'border-brand-light/70 text-brand-dark/70 hover:border-brand-accent/60'
+                        }`}
                     >
                       <input
                         type="radio"

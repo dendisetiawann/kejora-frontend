@@ -235,11 +235,10 @@ export default function OrderSuccessPage() {
                   <p className="text-sm text-slate-500">Nomor pesanan {payload.orderCode}</p>
                 </div>
                 <span
-                  className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                    isQrisPaymentSuccess
+                  className={`text-xs font-semibold px-3 py-1 rounded-full ${isQrisPaymentSuccess
                       ? 'text-green-600 bg-green-100'
                       : 'text-brand-accent bg-brand-accent/10'
-                  }`}
+                    }`}
                 >
                   {isQrisPaymentSuccess ? 'Pembayaran Berhasil' : 'Sistem memverifikasi pembayaran'}
                 </span>

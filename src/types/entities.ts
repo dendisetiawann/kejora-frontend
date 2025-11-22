@@ -42,13 +42,14 @@ export interface OrderItem {
 
 export interface Order {
   id: number;
+  order_number?: string;
   customer_name: string;
   table_number: string;
   customer_note?: string | null;
   total_amount: number;
   payment_method: 'cash' | 'qris';
   payment_status: 'belum_bayar' | 'pending' | 'dibayar' | 'gagal';
-  order_status: 'baru' | 'diproses' | 'selesai';
+  order_status: 'baru' | 'diproses' | 'selesai' | 'batal';
   snap_token?: string | null;
   midtrans_order_id?: string | null;
   created_at?: string;

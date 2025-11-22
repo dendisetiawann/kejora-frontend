@@ -158,8 +158,10 @@ export default function OrderPage() {
 
   useEffect(() => {
     const storedDraft = readCheckoutDraft();
-    if (storedDraft && storedDraft.items.length > 0) {
+    if (storedDraft) {
       setPendingDraft(storedDraft);
+    } else {
+      setDraftApplied(true);
     }
   }, []);
 
@@ -168,11 +170,15 @@ export default function OrderPage() {
       return;
     }
 
-    if (!customerName) {
-      setCustomerName(pendingDraft.customerName ?? '');
-    }
-    if (!tableNumber) {
-      setTableNumber(pendingDraft.tableNumber ?? '');
+    // Only restore name/table if there are actually items in the cart.
+    // If the cart is empty, we assume a fresh session and don't auto-fill user details.
+    if (pendingDraft.items.length > 0) {
+      if (!customerName && pendingDraft.customerName) {
+        setCustomerName(pendingDraft.customerName);
+      }
+      if (!tableNumber && pendingDraft.tableNumber) {
+        setTableNumber(pendingDraft.tableNumber);
+      }
     }
 
     const nextCart: Record<number, CartItem> = {};
@@ -190,6 +196,29 @@ export default function OrderPage() {
 
     setDraftApplied(true);
   }, [pendingDraft, draftApplied, menus, customerName, tableNumber]);
+
+  // Smart Auto-Save
+  useEffect(() => {
+    if (!draftApplied) return;
+
+    const currentItems = Object.values(cart).map((item) => ({
+      menu_id: item.menu.id,
+      name: item.menu.name,
+      price: item.menu.price,
+      qty: item.qty,
+    }));
+
+    saveCheckoutDraft({
+      customerName,
+      tableNumber,
+      items: currentItems,
+      createdAt: new Date().toISOString(),
+      paymentMethod: 'cash',
+      orderNote: '',
+    });
+  }, [cart, customerName, tableNumber, draftApplied]);
+
+
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
   const cartTotal = useMemo(
@@ -292,6 +321,10 @@ export default function OrderPage() {
     setFormError(null);
     if (!customerName.trim() || !tableNumber.trim()) {
       setFormError('Nama pelanggan dan nomor meja harus diisi.');
+      const element = document.getElementById('customer-info-section');
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
     if (cartItems.length === 0) {
@@ -376,10 +409,12 @@ export default function OrderPage() {
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10 space-y-8">
           {/* Customer Info Card */}
-          <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <section id="customer-info-section" className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
               <div className="h-10 w-10 rounded-full bg-brand-light flex items-center justify-center text-brand-DEFAULT">
-                <i className="fas fa-user"></i>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
               </div>
               <div>
                 <h2 className="text-lg font-bold text-brand-dark">Informasi Pesanan</h2>
@@ -387,12 +422,21 @@ export default function OrderPage() {
               </div>
             </div>
 
+            {formError && (
+              <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 flex items-center gap-2 animate-pulse">
+                <i className="fas fa-exclamation-circle"></i>
+                {formError}
+              </div>
+            )}
+
             <div className="grid gap-6 sm:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-700">Nama Pelanggan</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-400">👤</span>
+                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
                   </div>
                   <input
                     value={customerName}
@@ -407,14 +451,16 @@ export default function OrderPage() {
                 <label className="text-sm font-semibold text-gray-700">Nomor Meja</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-400">🪑</span>
+                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                    </svg>
                   </div>
                   <select
                     value={tableNumber}
                     onChange={(event) => setTableNumber(event.target.value)}
                     className="block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-DEFAULT focus:border-brand-DEFAULT transition-colors bg-gray-50 focus:bg-white appearance-none"
                   >
-                    <option value="">Pilih Nomor Meja</option>
+                    <option value="">Silakan pilih meja anda</option>
                     {TABLE_OPTIONS.map((value) => (
                       <option key={value} value={value}>
                         Meja {value}
@@ -445,7 +491,7 @@ export default function OrderPage() {
                     type="button"
                     onClick={() => setActiveCategory('all')}
                     className={`px-5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${activeCategory === 'all'
-                      ? 'bg-brand-DEFAULT text-white shadow-md shadow-brand-DEFAULT/20'
+                      ? 'bg-brand-accent text-brand-dark shadow-md shadow-brand-accent/20'
                       : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
                       }`}
                   >
@@ -457,7 +503,7 @@ export default function OrderPage() {
                       type="button"
                       onClick={() => setActiveCategory(category.id)}
                       className={`px-5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${activeCategory === category.id
-                        ? 'bg-brand-DEFAULT text-white shadow-md shadow-brand-DEFAULT/20'
+                        ? 'bg-brand-accent text-brand-dark shadow-md shadow-brand-accent/20'
                         : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
                         }`}
                     >
@@ -523,9 +569,7 @@ export default function OrderPage() {
                           <span className="font-bold text-brand-DEFAULT whitespace-nowrap">{formatCurrency(menu.price)}</span>
                         </div>
 
-                        <p className="text-sm text-gray-500 line-clamp-2 mb-4 flex-1">
-                          {menu.description ?? 'Nikmati rasa otentik dari menu pilihan kami.'}
-                        </p>
+
 
                         {/* Minimalist interaction hint */}
                         <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between text-xs font-medium text-gray-400 transition-colors">
@@ -546,12 +590,7 @@ export default function OrderPage() {
             )}
           </section>
 
-          {formError && (
-            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 flex items-center gap-2 animate-shake">
-              <i className="fas fa-exclamation-triangle"></i>
-              {formError}
-            </div>
-          )}
+
         </main>
 
 
@@ -709,7 +748,7 @@ export default function OrderPage() {
                         <button
                           type="button"
                           onClick={() => updateQty(item.menu, 1)}
-                          className="h-6 w-6 rounded-full bg-brand-DEFAULT text-white flex items-center justify-center hover:bg-brand-dark"
+                          className="h-6 w-6 rounded-full bg-brand-dark text-white flex items-center justify-center hover:bg-brand-DEFAULT"
                         >
                           <i className="fas fa-plus text-[10px]"></i>
                         </button>
@@ -721,34 +760,20 @@ export default function OrderPage() {
 
               <div className="border-t border-gray-100 p-6 bg-white space-y-4">
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Subtotal</span>
-                    <span className="font-bold text-brand-dark">{formatCurrency(cartTotal)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Pajak (10%)</span>
-                    <span className="font-bold text-brand-dark">{formatCurrency(cartTotal * 0.1)}</span>
-                  </div>
+
                   <div className="border-t border-dashed border-gray-200 my-2 pt-2 flex items-center justify-between text-lg">
                     <span className="font-bold text-brand-dark">Total</span>
-                    <span className="font-bold text-brand-DEFAULT">{formatCurrency(cartTotal * 1.1)}</span>
+                    <span className="font-bold text-brand-DEFAULT">{formatCurrency(cartTotal)}</span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   <button
                     type="button"
                     onClick={handleResetCart}
                     className="py-3 rounded-xl border border-red-200 text-red-500 font-semibold text-sm hover:bg-red-50 transition-colors"
                   >
-                    Kosongkan
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleProceedToCheckout}
-                    className="py-3 rounded-xl bg-brand-dark text-white font-bold text-sm hover:bg-brand-DEFAULT transition-colors shadow-lg"
-                  >
-                    Checkout
+                    Kosongkan Keranjang
                   </button>
                 </div>
               </div>
