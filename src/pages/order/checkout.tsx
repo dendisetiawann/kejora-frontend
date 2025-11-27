@@ -22,6 +22,8 @@ export default function OrderCheckoutPage() {
   const [draftChecked, setDraftChecked] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [customerNote, setCustomerNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!draft) {
@@ -34,8 +36,6 @@ export default function OrderCheckoutPage() {
       setCustomerNote(draft.orderNote);
     }
   }, [draft]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -139,7 +139,7 @@ export default function OrderCheckoutPage() {
   if (!draftChecked) {
     return (
       <div className="min-h-screen bg-brand-light flex items-center justify-center">
-        <p className="text-sm text-slate-500">Menyiapkan ringkasan pesanan...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-accent"></div>
       </div>
     );
   }
@@ -151,7 +151,7 @@ export default function OrderCheckoutPage() {
         <button
           type="button"
           onClick={() => router.replace('/order')}
-          className="px-4 py-2 rounded-full bg-brand-accent text-white"
+          className="px-6 py-2 rounded-full bg-brand-accent text-white font-medium hover:bg-brand-dark transition-colors"
         >
           Kembali ke menu
         </button>
@@ -162,131 +162,181 @@ export default function OrderCheckoutPage() {
   return (
     <>
       <Head>
-        <title>Ringkasan Pesanan - KejoraCash</title>
+        <title>Checkout - KejoraCash</title>
+        <link
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+          rel="stylesheet"
+        />
       </Head>
-      <div className="min-h-screen bg-brand-light/40 pb-20">
-        <header className="bg-white/90 shadow-sm border-b border-brand-light/60">
-          <div className="max-w-4xl mx-auto px-4 py-8 space-y-2">
-            <p className="text-xs uppercase tracking-[0.5em] text-brand-accent">Konfirmasi Pesanan</p>
-            <h1 className="text-3xl font-bold text-brand-dark">Cek kembali sebelum pesan</h1>
-            <p className="text-sm text-brand-dark/70">
-              Pastikan item, jumlah, dan metode pembayaran sudah sesuai. Kamu masih bisa menambahkan menu jika perlu.
-            </p>
+      <div className="min-h-screen bg-brand-light/40 pb-20 font-sans">
+        {/* Header */}
+        <header className="sticky top-0 z-20 backdrop-blur-md bg-white/70 border-b border-white/20 shadow-sm">
+          <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button onClick={handleBackToMenu} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors">
+                <i className="fas fa-arrow-left text-brand-dark"></i>
+              </button>
+              <h1 className="text-lg font-bold text-brand-dark tracking-tight">Konfirmasi Pesanan</h1>
+            </div>
+            <div className="text-xs font-medium px-3 py-1 rounded-full bg-brand-accent/10 text-brand-accent border border-brand-accent/20">
+              Meja {draft.tableNumber}
+            </div>
           </div>
         </header>
 
-        <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-          <section className="bg-white rounded-3xl shadow-[0_20px_60px_rgba(31,61,43,0.07)] border border-brand-light/60 p-6 space-y-4">
-            <div className="flex flex-col gap-1">
-              <p className="text-xs uppercase tracking-[0.4em] text-brand-accent">Informasi pelanggan</p>
-              <h2 className="text-2xl font-semibold text-brand-dark">{draft.customerName}</h2>
-              <p className="text-sm text-brand-dark/70">Nomor meja {draft.tableNumber}</p>
-              {orderTime && (
-                <p className="text-xs text-brand-dark/50">
-                  Dibuat {orderTime.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}
-                </p>
-              )}
-            </div>
-            <div className="rounded-2xl bg-brand-light/50 px-4 py-3 text-sm text-brand-dark/80">
-              Total item <span className="font-semibold text-brand-dark">{draft.items.length}</span>
+        <main className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+
+          {/* Customer Card */}
+          <section className="backdrop-blur-xl bg-white/80 rounded-3xl p-6 shadow-lg shadow-brand-accent/5 border border-white/50 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-accent/10 rounded-full blur-2xl -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-dark to-gray-800 flex items-center justify-center text-white shadow-md">
+                <i className="fas fa-user text-lg"></i>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-1">Pemesan</p>
+                <h2 className="text-xl font-bold text-brand-dark">{draft.customerName}</h2>
+              </div>
             </div>
           </section>
 
-          <section className="bg-white rounded-3xl shadow-[0_20px_60px_rgba(31,61,43,0.07)] border border-brand-light/60 p-6 space-y-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.4em] text-brand-accent">Detail pesanan</p>
-                <h2 className="text-xl font-semibold text-brand-dark">Ringkasan menu</h2>
-              </div>
-              <span className="text-sm text-brand-dark/70">Subtotal: {formatCurrency(total)}</span>
+          {/* Order Summary */}
+          <section className="backdrop-blur-xl bg-white/80 rounded-3xl p-6 shadow-lg shadow-brand-accent/5 border border-white/50">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-brand-dark flex items-center gap-2">
+                <i className="fas fa-receipt text-brand-accent"></i> Ringkasan Menu
+              </h3>
+              <span className="text-sm font-medium text-gray-500">{draft.items.length} Item</span>
             </div>
+
             <div className="space-y-4">
               {draft.items.map((item) => (
-                <div key={item.menu_id} className="flex items-start justify-between gap-4 border-b border-brand-light/50 pb-4">
-                  <div>
-                    <p className="font-semibold text-brand-dark">{item.name}</p>
-                    <p className="text-xs text-brand-dark/60">{item.qty} x {formatCurrency(item.price)}</p>
-                    {item.note && <p className="text-xs text-brand-accent mt-1">Catatan: {item.note}</p>}
+                <div key={item.menu_id} className="flex items-start justify-between group">
+                  <div className="flex-1">
+                    <div className="flex items-baseline justify-between">
+                      <p className="font-bold text-brand-dark text-base group-hover:text-brand-accent transition-colors">{item.name}</p>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
+                      <span className="font-medium text-brand-dark">{item.qty}x</span>
+                      <span>{formatCurrency(item.price)}</span>
+                    </div>
+                    {item.note && (
+                      <div className="mt-1 flex items-start gap-1 text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded-lg inline-block">
+                        <i className="fas fa-pen mt-0.5"></i> {item.note}
+                      </div>
+                    )}
                   </div>
-                  <p className="font-semibold text-brand-accent">{formatCurrency(item.price * item.qty)}</p>
+                  <p className="font-bold text-brand-dark">{formatCurrency(item.price * item.qty)}</p>
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-sm text-brand-dark/70">Total pembayaran</span>
-              <span className="text-2xl font-semibold text-brand-dark">{formatCurrency(total)}</span>
+
+            <div className="mt-6 pt-6 border-t border-dashed border-gray-200">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500 font-medium">Total Pembayaran</span>
+                <span className="text-2xl font-extrabold text-brand-dark">
+                  {formatCurrency(total)}
+                </span>
+              </div>
             </div>
           </section>
 
-          <section className="bg-white rounded-3xl shadow-[0_20px_60px_rgba(31,61,43,0.07)] border border-brand-light/60 p-6 space-y-6">
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="space-y-3">
-                <p className="text-xs uppercase tracking-[0.4em] text-brand-accent">Catatan untuk cafe</p>
-                <p className="text-sm text-brand-dark/70">Tambahkan permintaan khusus (opsional).</p>
-                <textarea
-                  value={customerNote}
-                  onChange={(event) => handleNoteChange(event.target.value)}
-                  placeholder="Contoh: Tolong buatkan tanpa gula, atau kirimkan dulu minuman panas."
-                  className="w-full min-h-[120px] rounded-2xl border border-brand-light/70 px-4 py-3 text-sm text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-accent/40"
-                />
-              </div>
+          {/* Preferences & Payment */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Note */}
+            <section className="backdrop-blur-xl bg-white/80 rounded-3xl p-6 shadow-lg shadow-brand-accent/5 border border-white/50 flex flex-col">
+              <h3 className="text-sm font-bold text-brand-dark uppercase tracking-wider mb-4 flex items-center gap-2">
+                <i className="fas fa-comment-alt text-gray-400"></i> Catatan
+              </h3>
+              <textarea
+                value={customerNote}
+                onChange={(event) => handleNoteChange(event.target.value)}
+                placeholder="Contoh: Jangan terlalu manis, es dipisah..."
+                className="w-full flex-1 min-h-[100px] rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-3 text-sm text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:bg-white transition-all resize-none"
+              />
+            </section>
 
+            {/* Payment Method */}
+            <section className="backdrop-blur-xl bg-white/80 rounded-3xl p-6 shadow-lg shadow-brand-accent/5 border border-white/50">
+              <h3 className="text-sm font-bold text-brand-dark uppercase tracking-wider mb-4 flex items-center gap-2">
+                <i className="fas fa-wallet text-gray-400"></i> Pembayaran
+              </h3>
               <div className="space-y-3">
-                <p className="text-xs uppercase tracking-[0.4em] text-brand-accent">Metode pembayaran</p>
-                <div className="grid grid-cols-1 gap-3">
-                  {(['cash', 'qris'] as PaymentMethod[]).map((method) => (
-                    <label
-                      key={method}
-                      className={`rounded-2xl border px-4 py-4 cursor-pointer transition ${paymentMethod === method
-                        ? 'border-brand-accent bg-brand-accent/10 text-brand-accent font-semibold shadow'
-                        : 'border-brand-light/70 text-brand-dark/70 hover:border-brand-accent/60'
-                        }`}
-                    >
-                      <input
-                        type="radio"
-                        name="payment_method"
-                        value={method}
-                        checked={paymentMethod === method}
-                        onChange={() => handlePaymentSelect(method)}
-                        className="hidden"
-                      />
-                      <div className="flex items-center justify-between text-sm">
-                        <span>{method === 'cash' ? 'Tunai di kasir' : 'QRIS'}</span>
-                        <i className={`fas ${method === 'cash' ? 'fa-wallet' : 'fa-qrcode'} text-base`}></i>
-                      </div>
-                      <p className="text-xs text-brand-dark/60 mt-1">
-                        {method === 'cash'
-                          ? 'Bayar langsung di kasir setelah pesanan dibuat.'
-                          : 'Scan QRIS setelah pesanan dikirim ke kasir.'}
+                {(['cash', 'qris'] as PaymentMethod[]).map((method) => (
+                  <label
+                    key={method}
+                    className={`relative flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 overflow-hidden ${paymentMethod === method
+                      ? 'border-brand-accent bg-brand-accent/5 shadow-md'
+                      : 'border-transparent bg-gray-50 hover:bg-gray-100'
+                      }`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      value={method}
+                      checked={paymentMethod === method}
+                      onChange={() => handlePaymentSelect(method)}
+                      className="hidden"
+                    />
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-colors ${paymentMethod === method ? 'bg-brand-accent text-white' : 'bg-white text-gray-400'
+                      }`}>
+                      <i className={`fas ${method === 'cash' ? 'fa-money-bill-wave' : 'fa-qrcode'}`}></i>
+                    </div>
+                    <div>
+                      <p className={`font-bold text-sm ${paymentMethod === method ? 'text-brand-dark' : 'text-gray-600'}`}>
+                        {method === 'cash' ? 'Tunai' : 'QRIS'}
                       </p>
-                    </label>
-                  ))}
-                </div>
+                      <p className="text-xs text-gray-400">
+                        {method === 'cash' ? 'Bayar di kasir' : 'Scan kode QR'}
+                      </p>
+                    </div>
+                    {paymentMethod === method && (
+                      <div className="absolute top-1/2 right-4 -translate-y-1/2 text-brand-accent">
+                        <i className="fas fa-check-circle text-xl"></i>
+                      </div>
+                    )}
+                  </label>
+                ))}
               </div>
-            </div>
+            </section>
+          </div>
 
-            {error && (
-              <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-600">{error}</div>
-            )}
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                type="button"
-                onClick={handleBackToMenu}
-                className="px-5 py-3 rounded-2xl border border-brand-dark/40 text-brand-dark font-semibold hover:bg-brand-dark hover:text-white transition"
-              >
-                Kembali
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="flex-1 bg-brand-accent hover:bg-brand-dark text-white font-semibold py-3 rounded-2xl shadow disabled:opacity-70"
-              >
-                {submitting ? 'Memproses...' : 'Pesan Sekarang'}
-              </button>
+          {error && (
+            <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 flex items-center gap-2 animate-pulse">
+              <i className="fas fa-exclamation-circle"></i>
+              {error}
             </div>
-          </section>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={handleBackToMenu}
+              disabled={submitting}
+              className="w-full sm:w-auto px-8 py-4 rounded-2xl border-2 border-slate-200 text-slate-600 font-bold hover:bg-slate-50 hover:border-slate-300 transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              Kembali
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="flex-1 bg-gradient-to-r from-brand-dark to-gray-900 text-white font-bold py-4 rounded-2xl shadow-xl shadow-brand-dark/20 hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {submitting ? (
+                <>
+                  <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Memproses Pesanan...</span>
+                </>
+              ) : (
+                <>
+                  <span>Pesan Sekarang</span>
+                </>
+              )}
+            </button>
+          </div>
+
         </main>
       </div>
     </>

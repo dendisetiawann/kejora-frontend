@@ -1,48 +1,42 @@
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import { useNotification } from '@/contexts/NotificationContext';
 import { adminGet } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { Order } from '@/types/entities';
 
-type HistoryFilter = 'all' | 'today' | 'week' | 'month' | 'year';
+type HistoryFilter = 'today' | 'week' | 'month' | 'year' | 'custom';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('today');
-  const [notification, setNotification] = useState<string | null>(null);
-  const previousOrdersRef = useRef<Order[]>([]);
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const { latestOrder, refreshOrders } = useNotification();
 
-  const fetchOrders = async (isPolling = false) => {
-    if (!isPolling) setLoading(true);
+  const fetchOrders = async () => {
+    setLoading(true);
     try {
       const data = await adminGet<Order[]>('/admin/orders');
-
-      // Check for new orders
-      if (isPolling && previousOrdersRef.current.length > 0) {
-        const newOrders = data.filter(
-          (o) => !previousOrdersRef.current.find((prev) => prev.id === o.id) && o.order_status === 'baru'
-        );
-        if (newOrders.length > 0) {
-          setNotification(`Pesanan baru diterima! (${newOrders.length} pesanan)`);
-          setTimeout(() => setNotification(null), 5000);
-        }
-      }
-
-      previousOrdersRef.current = data;
       setOrders(data);
     } finally {
-      if (!isPolling) setLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(() => fetchOrders(true), 5000);
-    return () => clearInterval(interval);
   }, []);
+
+  // Refresh orders when a new global notification arrives
+  useEffect(() => {
+    if (latestOrder) {
+      fetchOrders();
+    }
+  }, [latestOrder]);
 
   const filteredOrders = orders.filter((order) => {
     if (activeTab === 'active') {
@@ -53,7 +47,7 @@ export default function OrdersPage() {
 
     if (!['selesai', 'batal'].includes(order.order_status)) return false;
 
-    if (historyFilter === 'all') return true;
+
 
     const orderDate = new Date(order.created_at ?? 0);
     const now = new Date();
@@ -74,6 +68,14 @@ export default function OrdersPage() {
 
     if (historyFilter === 'year') {
       return orderDate.getFullYear() === now.getFullYear();
+    }
+
+    if (historyFilter === 'custom') {
+      if (!customStartDate && !customEndDate) return true;
+      const start = customStartDate ? new Date(customStartDate) : new Date(0);
+      const end = customEndDate ? new Date(customEndDate) : new Date();
+      end.setHours(23, 59, 59, 999); // Include the whole end day
+      return orderDate >= start && orderDate <= end;
     }
 
     return true;
@@ -109,21 +111,16 @@ export default function OrdersPage() {
     return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">Pesanan Diproses</span>;
   };
 
+  const totalRevenue = filteredOrders.reduce((acc, order) => {
+    if (order.order_status === 'selesai' || order.payment_status === 'dibayar') {
+      return acc + Number(order.total_amount);
+    }
+    return acc;
+  }, 0);
+
   return (
     <AdminLayout title="Kelola Pesanan">
-      {notification && (
-        <div className="fixed top-20 right-4 z-50 animate-fade-in-down">
-          <div className="bg-brand-dark text-white px-6 py-4 rounded-xl shadow-xl border border-brand-accent/30 flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-brand-accent flex items-center justify-center text-brand-dark">
-              <i className="fas fa-bell"></i>
-            </div>
-            <div>
-              <p className="font-bold text-brand-accent">Notifikasi</p>
-              <p className="text-sm">{notification}</p>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -134,25 +131,44 @@ export default function OrdersPage() {
 
           <div className="flex flex-col sm:flex-row gap-3">
             {activeTab === 'history' && (
-              <select
-                value={historyFilter}
-                onChange={(e) => setHistoryFilter(e.target.value as HistoryFilter)}
-                className="px-4 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-brand-accent focus:border-brand-accent"
-              >
-                <option value="today">Hari Ini</option>
-                <option value="week">Minggu Ini</option>
-                <option value="month">Bulan Ini</option>
-                <option value="year">Tahun Ini</option>
-                <option value="all">Semua Waktu</option>
-              </select>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={historyFilter}
+                  onChange={(e) => setHistoryFilter(e.target.value as HistoryFilter)}
+                  className="px-4 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-brand-accent focus:border-brand-accent"
+                >
+                  <option value="today">Hari Ini</option>
+                  <option value="week">7 Hari Terakhir</option>
+                  <option value="month">Bulan Ini</option>
+                  <option value="year">Tahun Ini</option>
+                  <option value="custom">Pilih Tanggal</option>
+                </select>
+                {historyFilter === 'custom' && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-brand-accent focus:border-brand-accent"
+                    />
+                    <span className="text-gray-400">-</span>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-brand-accent focus:border-brand-accent"
+                    />
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="flex bg-gray-100 p-1 rounded-lg">
               <button
                 onClick={() => setActiveTab('active')}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'active'
-                    ? 'bg-white text-brand-dark shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-white text-brand-dark shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 Pesanan Aktif
@@ -160,8 +176,8 @@ export default function OrdersPage() {
               <button
                 onClick={() => setActiveTab('history')}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'history'
-                    ? 'bg-white text-brand-dark shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-white text-brand-dark shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 Riwayat Pesanan
@@ -169,6 +185,16 @@ export default function OrdersPage() {
             </div>
           </div>
         </div>
+
+        {activeTab === 'history' && (
+          <div className="px-6 py-4 bg-brand-accent/5 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 font-medium">Total Pendapatan</p>
+              <p className="text-xs text-gray-400 mt-0.5">Berdasarkan filter yang dipilih</p>
+            </div>
+            <p className="text-2xl font-bold text-brand-dark">{formatCurrency(totalRevenue)}</p>
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
@@ -217,7 +243,7 @@ export default function OrdersPage() {
                   <td colSpan={8} className="text-center py-12 text-gray-400">
                     <div className="flex flex-col items-center justify-center">
                       <i className="fas fa-clipboard-list text-4xl mb-3 opacity-20"></i>
-                      <p>Tidak ada pesanan {activeTab === 'active' ? 'aktif' : 'dalam riwayat'} {activeTab === 'history' && historyFilter !== 'all' ? 'untuk periode ini' : ''}.</p>
+                      <p>Tidak ada pesanan {activeTab === 'active' ? 'aktif' : 'dalam riwayat'} {activeTab === 'history' ? 'untuk periode ini' : ''}.</p>
                     </div>
                   </td>
                 </tr>

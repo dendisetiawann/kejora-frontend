@@ -10,6 +10,7 @@ export interface User {
 export interface Category {
   id: number;
   name: string;
+  menu_count?: number;
   created_at?: string;
   updated_at?: string;
 }

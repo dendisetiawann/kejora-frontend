@@ -1,9 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import ToggleSwitch from '@/components/ToggleSwitch';
 import { adminDelete, adminGet, adminPost, adminPut } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { Category, Menu } from '@/types/entities';
 import { extractErrorMessage } from '@/lib/errors';
+import { resolveMenuPhoto } from '@/lib/menuPhoto';
 
 type MenuForm = {
   id?: number | null;
@@ -37,6 +39,10 @@ export default function MenusPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
 
+  // Notification State
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; message: string; onConfirm: () => void } | null>(null);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -55,10 +61,53 @@ export default function MenusPage() {
     loadData();
   }, []);
 
+  // Auto-dismiss notification
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSaving(true);
     setError(null);
+
+    // Client-side Validation
+    if (!form.name.trim()) {
+      setError('Nama menu tidak boleh kosong.');
+      setSaving(false);
+      return;
+    }
+    if (!form.category_id) {
+      setError('Kategori harus dipilih.');
+      setSaving(false);
+      return;
+    }
+    const price = Number(form.price);
+    if (isNaN(price) || price <= 0) {
+      setError('Harga harus berupa angka positif (tidak boleh 0).');
+      setSaving(false);
+      return;
+    }
+    if (form.photo) {
+      if (form.photo.size > 10 * 1024 * 1024) { // 10MB
+        setError('Ukuran foto maksimal 10MB.');
+        setSaving(false);
+        return;
+      }
+      const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+      if (!validTypes.includes(form.photo.type)) {
+        setError('Format foto harus JPG atau PNG.');
+        setSaving(false);
+        return;
+      }
+    }
 
     const formData = new FormData();
     formData.append('category_id', String(form.category_id));
@@ -77,8 +126,10 @@ export default function MenusPage() {
       if (form.id) {
         formData.append('_method', 'PUT');
         await adminPost(`/admin/menus/${form.id}`, formData);
+        showNotification('Menu berhasil diperbarui');
       } else {
         await adminPost('/admin/menus', formData);
+        showNotification('Menu berhasil ditambahkan');
       }
       setForm(defaultForm);
       setPhotoPreview(null);
@@ -105,10 +156,23 @@ export default function MenusPage() {
     setModalOpen(true);
   };
 
-  const handleDelete = async (menu: Menu) => {
-    if (!confirm(`Hapus menu ${menu.name}?`)) return;
-    await adminDelete(`/admin/menus/${menu.id}`);
-    loadData();
+  const handleDeleteClick = (menu: Menu) => {
+    setConfirmModal({
+      isOpen: true,
+      message: 'Apakah Anda yakin ingin menghapus menu ini?',
+      onConfirm: () => performDelete(menu),
+    });
+  };
+
+  const performDelete = async (menu: Menu) => {
+    setConfirmModal(null); // Close modal
+    try {
+      await adminDelete(`/admin/menus/${menu.id}`);
+      showNotification('Menu berhasil dihapus');
+      loadData();
+    } catch (err: unknown) {
+      showNotification(extractErrorMessage(err, 'Gagal menghapus menu.'), 'error');
+    }
   };
 
   const handleToggle = async (menu: Menu) => {
@@ -125,9 +189,10 @@ export default function MenusPage() {
         photo_path: menu.photo_path,
         is_visible: nextVisible,
       });
+      showNotification('Visibilitas menu berhasil diperbarui');
     } catch (err: unknown) {
       setMenus((prev) => prev.map((item) => (item.id === menu.id ? { ...item, is_visible: menu.is_visible } : item)));
-      alert(extractErrorMessage(err, 'Gagal mengubah visibilitas menu.'));
+      showNotification(extractErrorMessage(err, 'Gagal mengubah visibilitas menu.'), 'error');
     } finally {
       setTogglingId(null);
     }
@@ -157,6 +222,44 @@ export default function MenusPage() {
 
   return (
     <AdminLayout title="Kelola Menu">
+      {/* Toast Notification */}
+      {notification && (
+        <div className={`fixed top-6 right-6 z-[60] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-slide-in-right ${notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+          }`}>
+          <i className={`fas ${notification.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} text-xl`}></i>
+          <span className="font-semibold">{notification.message}</span>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmModal && confirmModal.isOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full animate-scale-up">
+            <div className="text-center mb-6">
+              <div className="h-16 w-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i className="fas fa-trash-alt text-2xl"></i>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Konfirmasi Hapus</h3>
+              <p className="text-gray-500">{confirmModal.message}</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors shadow-lg shadow-red-500/30"
+              >
+                Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl shadow p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -177,6 +280,7 @@ export default function MenusPage() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-slate-500 border-b border-slate-100">
+                <th className="py-2">Foto</th>
                 <th className="py-2">Nama</th>
                 <th>Kategori</th>
                 <th>Harga</th>
@@ -188,6 +292,15 @@ export default function MenusPage() {
               {visibleMenus.map((menu) => (
                 <tr key={menu.id} className="border-b border-slate-50">
                   <td className="py-3">
+                    <div className="h-12 w-12 rounded-lg bg-slate-100 overflow-hidden">
+                      <img
+                        src={resolveMenuPhoto(menu)}
+                        alt={menu.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  </td>
+                  <td className="py-3">
                     <p className="font-semibold text-brand-dark">{menu.name}</p>
                     {menu.description && (
                       <p className="text-xs text-slate-500 line-clamp-2">{menu.description}</p>
@@ -196,29 +309,12 @@ export default function MenusPage() {
                   <td>{menu.category?.name ?? '-'}</td>
                   <td className="text-brand-accent font-semibold">{formatCurrency(menu.price)}</td>
                   <td>
-                    <button
-                      type="button"
-                      onClick={() => handleToggle(menu)}
+                    <ToggleSwitch
+                      checked={menu.is_visible}
+                      onChange={() => handleToggle(menu)}
+                      isLoading={togglingId === menu.id}
                       disabled={togglingId === menu.id}
-                      className={`flex items-center w-20 rounded-full px-1 py-1 text-xs font-semibold transition-colors ${
-                        menu.is_visible ? 'bg-emerald-100 text-emerald-700 justify-end' : 'bg-rose-100 text-rose-700'
-                      }`}
-                    >
-                      <span
-                        className={`h-6 w-6 rounded-full bg-white shadow flex items-center justify-center ${menu.is_visible ? 'text-emerald-500' : 'text-rose-500'}`}
-                      >
-                        {togglingId === menu.id ? (
-                          <span className="animate-spin text-xs">
-                            <i className="fas fa-spinner"></i>
-                          </span>
-                        ) : (
-                          <i className={menu.is_visible ? 'fas fa-check' : 'fas fa-xmark'}></i>
-                        )}
-                      </span>
-                      <span className="flex-1 text-center">
-                        {menu.is_visible ? 'Aktif' : 'Nonaktif'}
-                      </span>
-                    </button>
+                    />
                   </td>
                   <td className="text-right space-x-3 py-2">
                     <button
@@ -230,7 +326,7 @@ export default function MenusPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDelete(menu)}
+                      onClick={() => handleDeleteClick(menu)}
                       className="text-sm text-red-500 font-semibold"
                     >
                       Hapus
@@ -240,7 +336,7 @@ export default function MenusPage() {
               ))}
               {!loading && menus.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center py-6 text-slate-500">
+                  <td colSpan={6} className="text-center py-6 text-slate-500">
                     Belum ada menu.
                   </td>
                 </tr>
@@ -331,22 +427,10 @@ export default function MenusPage() {
               </label>
               <label className="flex items-center justify-between text-sm font-semibold text-slate-600">
                 <span>Tampilkan ke pelanggan</span>
-                <button
-                  type="button"
-                  onClick={() => setForm((prev) => ({ ...prev, is_visible: !prev.is_visible }))}
-                  className={`flex items-center w-20 rounded-full px-1 py-1 text-xs font-semibold transition-colors ${
-                    form.is_visible ? 'bg-emerald-100 text-emerald-700 justify-end' : 'bg-rose-100 text-rose-700'
-                  }`}
-                >
-                  <span
-                    className={`h-6 w-6 rounded-full bg-white shadow flex items-center justify-center ${form.is_visible ? 'text-emerald-500' : 'text-rose-500'}`}
-                  >
-                    <i className={form.is_visible ? 'fas fa-check' : 'fas fa-xmark'}></i>
-                  </span>
-                  <span className="flex-1 text-center">
-                    {form.is_visible ? 'Aktif' : 'Nonaktif'}
-                  </span>
-                </button>
+                <ToggleSwitch
+                  checked={form.is_visible}
+                  onChange={(checked) => setForm((prev) => ({ ...prev, is_visible: checked }))}
+                />
               </label>
               <div className="flex flex-wrap gap-2 justify-end pt-2">
                 <button
@@ -372,7 +456,7 @@ export default function MenusPage() {
                   ) : (
                     <>
                       <i className="fas fa-save"></i>
-                      Simpan Menu
+                      {form.id ? 'Simpan Perubahan' : 'Simpan'}
                     </>
                   )}
                 </button>

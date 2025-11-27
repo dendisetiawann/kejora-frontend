@@ -62,7 +62,7 @@ export const adminGet = async <T>(url: string, params?: Record<string, unknown>)
 
 export const adminPost = async <T>(url: string, data?: unknown): Promise<T> => {
   const config = isFormDataPayload(data)
-    ? { headers: { 'Content-Type': 'multipart/form-data' }, transformRequest: (value: unknown) => value }
+    ? { transformRequest: (value: unknown) => value }
     : undefined;
   const response = await adminClient.post<T>(url, data, config);
   return response.data;
@@ -70,7 +70,7 @@ export const adminPost = async <T>(url: string, data?: unknown): Promise<T> => {
 
 export const adminPut = async <T>(url: string, data?: unknown): Promise<T> => {
   const config = isFormDataPayload(data)
-    ? { headers: { 'Content-Type': 'multipart/form-data' }, transformRequest: (value: unknown) => value }
+    ? { transformRequest: (value: unknown) => value }
     : undefined;
   const response = await adminClient.put<T>(url, data, config);
   return response.data;

@@ -20,103 +20,7 @@ type CategoryFilter = {
 const TABLE_OPTIONS = Array.from({ length: 15 }, (_, index) => (index + 1).toString());
 const IMAGE_BASE_URL = (process.env.NEXT_PUBLIC_IMAGE_BASE_URL ?? '').replace(/\/$/, '');
 
-const resolveMenuPhoto = (menu: Menu): string => {
-  // User reported old photos are broken, so we ignore menu.photo_path entirely
-  // and force internet references for everything.
-
-  const name = menu.name.toLowerCase();
-
-  // --- COFFEE (HOT) ---
-  if (name.includes('cappuccino')) return 'https://images.unsplash.com/photo-1534778101976-62847782c213?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('latte') && !name.includes('ice')) return 'https://images.unsplash.com/photo-1561882468-9110e03e0f78?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('espresso')) return 'https://images.unsplash.com/photo-1579992357154-faf4bde95b3d?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('americano') && !name.includes('ice')) return 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('mocha') || name.includes('mocca')) return 'https://images.unsplash.com/photo-1578314675249-a6910f80cc4e?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('macchiato')) return 'https://images.unsplash.com/photo-1557006021-b85faa2bc5e2?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('flat white')) return 'https://images.unsplash.com/photo-1572286258217-145c8814e41c?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('piccolo')) return 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('affogato')) return 'https://images.unsplash.com/photo-1594631252845-29fc4cc8cde9?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('kopi susu') || name.includes('kopi gula')) return 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('kopi hitam') || (name.includes('kopi') && name.includes('hitam'))) return 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('tubruk')) return 'https://images.unsplash.com/photo-1518832553480-cd0e625ed3e6?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('v60') || name.includes('manual brew')) return 'https://images.unsplash.com/photo-1498603536246-15572faa67a6?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('vietnam drip')) return 'https://images.unsplash.com/photo-1565458318272-3343a7e2c74d?auto=format&fit=crop&w=800&q=80';
-
-  // --- COFFEE (ICED) ---
-  if (name.includes('ice') && (name.includes('latte') || name.includes('lat'))) return 'https://images.unsplash.com/photo-1517487881594-2787fef5ebf7?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('ice') && name.includes('americano')) return 'https://images.unsplash.com/photo-1517578239113-b03992dcdd25?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('ice') && (name.includes('coffee') || name.includes('kopi'))) return 'https://images.unsplash.com/photo-1461023058943-48dbf94565b0?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('cold brew')) return 'https://images.unsplash.com/photo-1517959105821-eaf2591984ca?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('frappe') || name.includes('frappuccino')) return 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=800&q=80';
-
-  // --- TEA & MILK ---
-  if (name.includes('matcha') && name.includes('latte')) return 'https://images.unsplash.com/photo-1536013266021-c80a2e3a2f0c?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('matcha')) return 'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('thai tea') || name.includes('teh thai')) return 'https://images.unsplash.com/photo-1576092768581-7b2d3f5cb4f1?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('green tea') || name.includes('teh hijau')) return 'https://images.unsplash.com/photo-1627435601361-ec25f5b1d0e5?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('lemon tea') || name.includes('teh lemon')) return 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('lychee tea') || name.includes('leci')) return 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('milk tea')) return 'https://images.unsplash.com/photo-1558160074-4d7d8bdf4256?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('tea') || name.includes('teh')) return 'https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('chocolate') || name.includes('coklat')) return 'https://images.unsplash.com/photo-1542990253-0d0f5be5f0ed?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('red velvet')) return 'https://images.unsplash.com/photo-1616541823729-00fe0aacd32c?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('taro')) return 'https://images.unsplash.com/photo-1558160074-4d7d8bdf4256?auto=format&fit=crop&w=800&q=80'; // Purple drink generic
-
-  // --- REFRESHERS ---
-  if (name.includes('milkshake') || name.includes('milk shake')) return 'https://images.unsplash.com/photo-1579954115545-a95591f28bfc?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('smoothie')) return 'https://images.unsplash.com/photo-1505252585461-04db1eb84625?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('juice') || name.includes('jus')) return 'https://images.unsplash.com/photo-1613478223719-2ab802602423?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('mojito') || name.includes('soda')) return 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('squash')) return 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80';
-
-  // --- MAIN COURSE (RICE) ---
-  if (name.includes('nasi goreng')) return 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('rice bowl')) return 'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('chicken katsu') || name.includes('katsu')) return 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('teriyaki')) return 'https://images.unsplash.com/photo-1580476262716-6b3693166861?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('nasi ayam') || name.includes('chicken rice')) return 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('nasi')) return 'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=800&q=80';
-
-  // --- MAIN COURSE (NOODLES) ---
-  if (name.includes('mie goreng') || name.includes('mi goreng')) return 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('ramen')) return 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('pasta') || name.includes('spaghetti') || name.includes('carbonara') || name.includes('bolognese')) return 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('mie') || name.includes('mi') || name.includes('noodle')) return 'https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?auto=format&fit=crop&w=800&q=80';
-
-  // --- SNACKS & LIGHT BITES ---
-  if (name.includes('croissant')) return 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('sandwich') || name.includes('sandwic')) return 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('burger')) return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('toast') || name.includes('roti bakar')) return 'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('roti') || name.includes('bread')) return 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('donut') || name.includes('donat')) return 'https://images.unsplash.com/photo-1551024506-0bccd828d307?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('kentang') || name.includes('french fries') || name.includes('fries')) return 'https://images.unsplash.com/photo-1578681994506-b8f463449011?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('nugget')) return 'https://images.unsplash.com/photo-1562967914-608f82629710?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('onion ring')) return 'https://images.unsplash.com/photo-1639024471283-03518883512d?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('dimsum') || name.includes('siomay')) return 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('salad')) return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('soup') || name.includes('sup')) return 'https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=800&q=80';
-
-  // --- DESSERTS ---
-  if (name.includes('cake') || name.includes('kue')) return 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('tiramisu')) return 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('cheesecake')) return 'https://images.unsplash.com/photo-1524351199678-941a58a3df50?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('brownie')) return 'https://images.unsplash.com/photo-1607920591413-4ec007e70023?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('cookie') || name.includes('kuki')) return 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('waffle')) return 'https://images.unsplash.com/photo-1562376552-0d160a2f238d?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('pancake')) return 'https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=800&q=80';
-  if (name.includes('ice cream') || name.includes('es krim')) return 'https://images.unsplash.com/photo-1497034825429-c343d7c6a68f?auto=format&fit=crop&w=800&q=80';
-
-  // --- FALLBACKS ---
-  // If it's a drink but unknown
-  if (name.includes('ice') || name.includes('es ')) return 'https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&w=800&q=80';
-
-  // Generic Food Fallback
-  if (name.includes('paket') || name.includes('combo')) return 'https://images.unsplash.com/photo-1544025162-d76690b67f61?auto=format&fit=crop&w=800&q=80';
-
-  // Ultimate Fallback (Cafe Ambience / Generic Coffee)
-  return `https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80`;
-};
+import { resolveMenuPhoto } from '@/lib/menuPhoto';
 
 export default function OrderPage() {
   const router = useRouter();
@@ -387,22 +291,32 @@ export default function OrderPage() {
               <span className="font-bold text-xl tracking-tight text-brand-dark">Kejora Café</span>
             </div>
             <div className="flex items-center gap-4">
-              <div className="hidden sm:flex items-center gap-2 text-sm font-medium text-brand-dark/60">
+              <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full text-sm font-semibold text-brand-dark">
+                <i className="far fa-clock text-brand-DEFAULT"></i>
+                <span>08:00 - 23:00</span>
+                <span className="mx-1 text-gray-300">|</span>
                 <span>Senin - Minggu</span>
-                <span className="h-1 w-1 rounded-full bg-brand-dark/30"></span>
-                <span>08:00 - 22:00</span>
               </div>
             </div>
           </div>
         </header>
 
         {/* Hero / Banner */}
-        <div className="bg-brand-dark text-white py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl"></div>
-          <div className="relative max-w-7xl mx-auto">
-            <h1 className="text-3xl sm:text-4xl font-bold mb-2 tracking-tight">Order & Enjoy</h1>
-            <p className="text-brand-light/80 max-w-xl text-lg">
-              Nikmati kopi favoritmu tanpa antri. Pesan sekarang, kami siapkan dengan sepenuh hati.
+        <div className="relative overflow-hidden bg-gray-900 py-16 px-4 sm:px-6 lg:px-8">
+          {/* Futuristic Background Elements */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-violet-900/40 via-gray-900 to-gray-900"></div>
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-brand-accent to-transparent opacity-50"></div>
+          <div className="absolute -top-24 -right-24 w-96 h-96 bg-brand-accent/20 rounded-full blur-3xl"></div>
+          <div className="absolute top-1/2 left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
+
+          <div className="relative max-w-7xl mx-auto text-center sm:text-left">
+            <h1 className="text-4xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-400 mb-4 tracking-tight drop-shadow-sm">
+              Kejora Café <br className="hidden sm:block" />
+              <span className="text-brand-accent drop-shadow-[0_0_15px_rgba(217,119,6,0.5)]">Sinari Harimu</span>
+            </h1>
+            <p className="text-gray-400 max-w-2xl text-lg sm:text-xl leading-relaxed">
+              Nikmati cita rasa bintang dalam setiap tegukan. <br className="hidden sm:block" />
+              Pesan sekarang, kami sajikan kehangatan untuk Anda.
             </p>
           </div>
         </div>
@@ -450,9 +364,10 @@ export default function OrderPage() {
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-700">Nomor Meja</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                    {/* Custom Table Icon */}
+                    <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
+                      <path d="M4 19h16v2H4zM20 12H4v5h2v-3h12v3h2zM18 6h-2.5c-.28 0-.5.22-.5.5v3c0 .28.22.5.5.5H18c1.38 0 2.5-1.12 2.5-2.5S19.38 6 18 6zm-5-4c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2zm-4 0c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2zM2 12v-2h20v2H2z" />
                     </svg>
                   </div>
                   <select
@@ -556,11 +471,7 @@ export default function OrderPage() {
                             {menu.category?.name ?? 'Menu'}
                           </span>
                         </div>
-                        {isInCart && (
-                          <div className="absolute bottom-3 right-3 bg-brand-DEFAULT text-white px-2 py-1 rounded-lg text-xs font-bold shadow-lg">
-                            {cartItem.qty}x di Keranjang
-                          </div>
-                        )}
+
                       </div>
 
                       <div className="p-5 flex flex-col flex-1">
@@ -570,12 +481,31 @@ export default function OrderPage() {
                         </div>
 
 
-
-                        {/* Minimalist interaction hint */}
-                        <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between text-xs font-medium text-gray-400 transition-colors">
-                          <span>Klik untuk detail</span>
-                          <i className="fas fa-arrow-right opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-[-10px] group-hover:translate-x-0"></i>
-                        </div>
+                        {isInCart ? (
+                          /* In-Card Quantity Control (Only when in cart) */
+                          <div className="mt-auto flex items-center justify-between bg-gray-50 rounded-lg p-1 border border-gray-200" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => updateQty(menu, -1)}
+                              className="w-8 h-8 flex items-center justify-center text-brand-dark hover:bg-white hover:shadow-sm rounded-md transition-all"
+                            >
+                              <i className="fas fa-minus text-xs"></i>
+                            </button>
+                            <span className="font-bold text-brand-dark text-sm">{cartItem.qty}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateQty(menu, 1)}
+                              className="w-8 h-8 flex items-center justify-center text-white bg-brand-dark hover:bg-brand-DEFAULT rounded-md transition-all shadow-sm"
+                            >
+                              <i className="fas fa-plus text-xs"></i>
+                            </button>
+                          </div>
+                        ) : (
+                          /* Description (When not in cart) */
+                          <p className="text-sm text-gray-500 mt-2 line-clamp-2 min-h-[2.5rem]">
+                            {menu.description || 'Nikmati cita rasa istimewa dari menu andalan kami.'}
+                          </p>
+                        )}
                       </div>
                     </article>
                   );
@@ -616,7 +546,7 @@ export default function OrderPage() {
 
               {/* Right-aligned Cart Icon */}
               <div
-                className="absolute right-4 flex items-center justify-center cursor-pointer group"
+                className="fixed bottom-28 right-4 z-40 sm:absolute sm:bottom-auto sm:right-4 sm:z-auto flex items-center justify-center cursor-pointer group"
                 onClick={handleOpenCart}
               >
                 <div className="relative h-12 w-12 rounded-full bg-brand-light flex items-center justify-center text-brand-dark group-hover:bg-brand-accent/20 transition-colors">

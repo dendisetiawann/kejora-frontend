@@ -98,7 +98,8 @@ export default function OrderSuccessPage() {
       return null;
     }
     const createdAt = new Date(payload.createdAt);
-    return new Date(createdAt.getTime() + 15 * 60 * 1000);
+    // 24 hours deadline
+    return new Date(createdAt.getTime() + 24 * 60 * 60 * 1000);
   }, [payload]);
 
   const readableOrderStatus = (status?: string | null) => {
@@ -138,98 +139,10 @@ export default function OrderSuccessPage() {
       { label: 'Status Pesanan', value: readableOrderStatus(payload.orderStatus) },
     ];
   }, [payload]);
-
   const handleBackToMenu = () => {
     clearOrderSuccess();
     router.replace('/order');
   };
-
-  useEffect(() => {
-    if (!payload || payload.paymentMethod !== 'cash') {
-      return;
-    }
-    if (receiptGeneratedRef.current) {
-      return;
-    }
-
-    const generateReceipt = async () => {
-      try {
-        const { jsPDF } = await import('jspdf');
-        const doc = new jsPDF();
-        const lineHeight = 8;
-        let y = 20;
-
-        doc.setFontSize(16);
-        doc.text('Kejora Café', 14, y);
-        y += lineHeight;
-        doc.setFontSize(10);
-        doc.text('Bukti Pemesanan Pembayaran Tunai', 14, y);
-        y += lineHeight * 2;
-
-        const summary = [
-          `Nomor Pesanan : ${payload.orderCode}`,
-          `Nama Pelanggan : ${payload.customerName}`,
-          `Nomor Meja : ${payload.tableNumber}`,
-          `Metode : Tunai di kasir`,
-          `Total : ${formatCurrency(payload.total)}`,
-          `Waktu : ${new Date(payload.createdAt).toLocaleString('id-ID', {
-            dateStyle: 'full',
-            timeStyle: 'short',
-          })}`,
-        ];
-
-        summary.forEach((text) => {
-          doc.text(text, 14, y);
-          y += lineHeight;
-        });
-
-        y += lineHeight;
-        doc.setFontSize(12);
-        doc.text('Rincian Item', 14, y);
-        y += lineHeight;
-        doc.setFontSize(10);
-
-        payload.items.forEach((item) => {
-          if (y > 270) {
-            doc.addPage();
-            y = 20;
-          }
-          doc.text(`${item.qty}x ${item.name} @ ${formatCurrency(item.price)} = ${formatCurrency(item.qty * item.price)}`, 14, y);
-          y += lineHeight;
-          if (item.note) {
-            doc.text(`Catatan: ${item.note}`, 18, y);
-            y += lineHeight;
-          }
-        });
-
-        y += lineHeight;
-        doc.setFontSize(10);
-        doc.text('Tunjukkan struk ini ke kasir untuk menyelesaikan pembayaran.', 14, y);
-
-        doc.save(`KejoraCash-${payload.orderCode}.pdf`);
-        receiptGeneratedRef.current = true;
-      } catch (error) {
-        console.error('Gagal membuat struk PDF', error);
-      }
-    };
-
-    generateReceipt();
-  }, [payload]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    if (!payload || payload.paymentMethod !== 'qris') {
-      return;
-    }
-    if (!payload.snapToken || gatewayOpened) {
-      return;
-    }
-
-    window.open(payload.snapToken, '_blank');
-    setGatewayOpened(true);
-  }, [payload, gatewayOpened]);
 
   const statusParam = router.query.status;
   const statusQuery = Array.isArray(statusParam) ? statusParam[0] : statusParam;
@@ -246,6 +159,166 @@ export default function OrderSuccessPage() {
     !paymentCleared &&
     markPaidState === 'idle'
   );
+
+  const lastGeneratedStatusRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!payload) {
+      return;
+    }
+
+    // Check if payment is successful (either Cash verified or QRIS success)
+    const isCash = payload.paymentMethod === 'cash';
+    const isQrisSuccess = payload.paymentMethod === 'qris' && isQrisPaymentSuccess;
+
+    // Determine current status for receipt
+    let currentStatus = 'UNKNOWN';
+    if (isCash) {
+      currentStatus = paymentCleared ? 'PAID' : 'PENDING';
+    } else if (payload.paymentMethod === 'qris') {
+      currentStatus = isQrisSuccess ? 'PAID' : 'PENDING';
+    }
+
+    // Only generate if status changed (e.g. PENDING -> PAID) or hasn't been generated yet
+    // For QRIS, we might still only want to generate on PAID, but for Cash we want both.
+
+    if (payload.paymentMethod === 'qris' && currentStatus !== 'PAID') {
+      return;
+    }
+
+    if (lastGeneratedStatusRef.current === currentStatus) {
+      return;
+    }
+
+    const generateReceipt = async () => {
+      try {
+        const { jsPDF } = await import('jspdf');
+        // Create a PDF with A6 size (105mm x 148mm) which is a good receipt size.
+        const doc = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a6'
+        });
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const centerX = pageWidth / 2;
+        let y = 10;
+        const lineHeight = 5;
+        const dashedLine = '------------------------------------------------';
+
+        // Helper for centered text
+        const centerText = (text: string, yPos: number, size: number = 10, font: string = 'helvetica', style: string = 'normal') => {
+          doc.setFont(font, style);
+          doc.setFontSize(size);
+          doc.text(text, centerX, yPos, { align: 'center' });
+        };
+
+        // Helper for left-right text
+        const rowText = (left: string, right: string, yPos: number, size: number = 9) => {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(size);
+          doc.text(left, 5, yPos);
+          doc.text(right, pageWidth - 5, yPos, { align: 'right' });
+        };
+
+        // Header
+        centerText('CAFE KEJORA', y, 14, 'helvetica', 'bold');
+        y += lineHeight + 2;
+        centerText('Jl. Raya Puncak No. 123', y, 8);
+        y += lineHeight;
+        centerText('Telp: 0812-3456-7890', y, 8);
+        y += lineHeight + 2;
+
+        centerText(dashedLine, y, 8);
+        y += lineHeight;
+
+        // Order Info
+        rowText(`Order: ${payload.orderCode}`, new Date(payload.createdAt).toLocaleDateString('id-ID'), y);
+        y += lineHeight;
+        rowText(`Meja: ${payload.tableNumber}`, new Date(payload.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }), y);
+        y += lineHeight;
+        rowText(`Pelanggan: ${payload.customerName}`, '', y);
+        y += lineHeight + 2;
+
+        centerText(dashedLine, y, 8);
+        y += lineHeight;
+
+        // Items
+        payload.items.forEach((item) => {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9);
+          doc.text(item.name, 5, y);
+          y += lineHeight;
+
+          rowText(`${item.qty} x ${formatCurrency(item.price)}`, formatCurrency(item.qty * item.price), y);
+          y += lineHeight;
+
+          if (item.note) {
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(8);
+            doc.text(`(Catatan: ${item.note})`, 8, y);
+            y += lineHeight;
+          }
+          y += 2; // Extra spacing between items
+        });
+
+        centerText(dashedLine, y, 8);
+        y += lineHeight;
+
+        // Totals
+        doc.setFont('helvetica', 'bold');
+        rowText('TOTAL', formatCurrency(payload.total), y, 12);
+        y += lineHeight + 2;
+
+        rowText('Metode Bayar', payload.paymentMethod === 'qris' ? 'QRIS' : 'Tunai', y);
+        y += lineHeight;
+
+        // Status Logic
+        const isPaid = currentStatus === 'PAID';
+        const statusLabel = isPaid ? 'LUNAS' : 'MENUNGGU PEMBAYARAN';
+
+        rowText('Status', statusLabel, y);
+        y += lineHeight + 4;
+
+        // Footer
+        centerText('Terima Kasih', y, 10, 'helvetica', 'bold');
+        y += lineHeight;
+
+        if (!isPaid && payload.paymentMethod === 'cash') {
+          centerText('Silakan tunjukkan struk ini', y, 9);
+          y += lineHeight;
+          centerText('ke kasir untuk pembayaran', y, 9);
+        } else {
+          centerText('Silakan Datang Kembali', y, 8);
+          y += lineHeight;
+          centerText('Wifi: KejoraFree / Pass: kopi123', y, 8);
+        }
+
+        const fileName = isPaid ? `Struk-Lunas-${payload.orderCode}.pdf` : `Struk-Tagihan-${payload.orderCode}.pdf`;
+        doc.save(fileName);
+        lastGeneratedStatusRef.current = currentStatus;
+      } catch (error) {
+        console.error('Gagal membuat struk PDF', error);
+      }
+    };
+
+    generateReceipt();
+  }, [payload, paymentCleared, isQrisPaymentSuccess]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    if (!payload || payload.paymentMethod !== 'qris') {
+      return;
+    }
+    if (!payload.snapToken || gatewayOpened) {
+      return;
+    }
+
+    window.open(payload.snapToken, '_blank');
+    setGatewayOpened(true);
+  }, [payload, gatewayOpened]);
 
   useEffect(() => {
     if (!shouldMarkPaidFallback || !payload) {
@@ -319,219 +392,195 @@ export default function OrderSuccessPage() {
       <Head>
         <title>Pesanan Berhasil - KejoraCash</title>
       </Head>
-      <div className="min-h-screen bg-brand-light/60 pb-20">
-        <header className="bg-white shadow-sm">
-          <div className="max-w-4xl mx-auto px-4 py-8 space-y-2">
-            <p className="text-sm uppercase tracking-[0.3em] text-brand-accent">Pesanan berhasil</p>
-            <h1 className="text-3xl font-bold text-brand-dark">Terima kasih, {payload.customerName}</h1>
-            <p className="text-sm text-slate-500">{statusText}</p>
+      <div className="min-h-screen bg-brand-light/40 pb-20 font-sans text-slate-800">
+        <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-white/20 shadow-sm">
+          <div className="max-w-4xl mx-auto px-6 py-6 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-accent">Pesanan Berhasil</p>
+            </div>
+            <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600">
+              Terima kasih, {payload.customerName}
+            </h1>
+            <p className="text-sm text-slate-500 max-w-2xl">{statusText}</p>
           </div>
         </header>
 
-        <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-          <section className="bg-white rounded-2xl shadow p-6 space-y-4">
-            <div className="flex flex-col gap-1">
-              <p className="text-xs uppercase tracking-widest text-brand-accent">Nomor Pesanan</p>
-              <h2 className="text-2xl font-bold text-brand-dark">{payload.orderCode}</h2>
-              <p className="text-sm text-slate-500">Meja {payload.tableNumber}</p>
-              <p className="text-xs text-slate-400">
-                Waktu pesanan {new Date(payload.createdAt).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}
-              </p>
+        <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+          {/* Order Summary Card */}
+          <section className="backdrop-blur-xl bg-white/80 border border-white/50 shadow-xl rounded-3xl p-8 space-y-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-brand-accent/5 to-transparent rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+
+            <div className="relative z-10 flex flex-col gap-2">
+              <p className="text-xs uppercase tracking-widest text-brand-accent font-bold">Nomor Pesanan</p>
+              <h2 className="text-4xl font-black text-brand-dark tracking-tight">{payload.orderCode}</h2>
+              <div className="flex items-center gap-3 text-sm text-slate-500">
+                <span className="px-3 py-1 rounded-full bg-slate-100 border border-slate-200 font-medium">
+                  Meja {payload.tableNumber}
+                </span>
+                <span>•</span>
+                <span>{new Date(payload.createdAt).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}</span>
+              </div>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+            <div className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
+
+            <div className="grid gap-6 sm:grid-cols-2 relative z-10">
               <div>
-                <p className="text-xs text-slate-500">Metode pembayaran</p>
-                <p className="text-lg font-semibold text-brand-dark">{isQris ? 'QRIS' : 'Tunai di kasir'}</p>
+                <p className="text-xs text-slate-500 mb-1">Metode pembayaran</p>
+                <p className="text-lg font-bold text-brand-dark flex items-center gap-2">
+                  {isQris ? (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-blue-500" />
+                      QRIS
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-green-500" />
+                      Tunai di kasir
+                    </>
+                  )}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">Total pembayaran</p>
-                <p className="text-2xl font-semibold text-brand-accent">{formatCurrency(payload.total)}</p>
+                <p className="text-xs text-slate-500 mb-1">Total pembayaran</p>
+                <p className="text-2xl font-black text-brand-accent">{formatCurrency(payload.total)}</p>
               </div>
             </div>
           </section>
 
           {isQris ? (
-            <section className="bg-white rounded-2xl shadow p-6 space-y-4">
+            <section className="backdrop-blur-xl bg-white/80 border border-white/50 shadow-xl rounded-3xl p-8 space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-widest text-brand-accent">QRIS Dinamis</p>
-                  <h2 className="text-xl font-semibold text-brand-dark">Merchant ID {MERCHANT_ID}</h2>
-                  <p className="text-sm text-slate-500">Nomor pesanan {payload.orderCode}</p>
+                  <p className="text-xs uppercase tracking-widest text-brand-accent font-bold">QRIS Dinamis</p>
+                  <h2 className="text-xl font-bold text-brand-dark mt-1">Cafe Kejora ({MERCHANT_ID})</h2>
                 </div>
                 <span
-                  className={`text-xs font-semibold px-3 py-1 rounded-full ${isQrisPaymentSuccess
-                      ? 'text-green-600 bg-green-100'
-                      : 'text-brand-accent bg-brand-accent/10'
+                  className={`text-xs font-bold px-4 py-2 rounded-full border ${isQrisPaymentSuccess
+                    ? 'text-green-700 bg-green-50 border-green-200'
+                    : 'text-brand-accent bg-brand-accent/5 border-brand-accent/20'
                     }`}
                 >
-                  {isQrisPaymentSuccess ? 'Pembayaran Berhasil' : 'Sistem memverifikasi pembayaran'}
+                  {isQrisPaymentSuccess ? 'Pembayaran Berhasil' : 'Menunggu Pembayaran'}
                 </span>
               </div>
-              <div className="flex flex-col items-center gap-4">
+
+              <div className="flex flex-col items-center gap-6 py-4">
                 {!isQrisPaymentSuccess &&
                   (qrisImageSrc ? (
-                    <img src={qrisImageSrc} alt="QRIS Kejora" className="h-56 w-56 rounded-2xl border border-slate-100" />
+                    <div className="p-4 bg-white rounded-3xl shadow-lg border border-slate-100">
+                      <img src={qrisImageSrc} alt="QRIS Kejora" className="h-64 w-64 rounded-xl" />
+                    </div>
                   ) : (
-                    <div className="h-56 w-56 rounded-2xl border border-dashed border-slate-200 flex items-center justify-center text-sm text-slate-500">
+                    <div className="h-64 w-64 rounded-3xl border-2 border-dashed border-slate-200 flex items-center justify-center text-sm text-slate-500 bg-slate-50">
                       QRIS akan muncul setelah sistem menerima token.
                     </div>
                   ))}
+
                 {isQrisPaymentSuccess ? (
-                  <div className="text-center space-y-1">
-                    <p className="text-sm font-semibold text-brand-dark">Pembayaran Berhasil</p>
-                    <p className="text-xs text-slate-500">
+                  <div className="text-center space-y-2 max-w-md">
+                    <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <p className="text-lg font-bold text-brand-dark">Pembayaran Berhasil</p>
+                    <p className="text-sm text-slate-500">
                       Sistem menyimpan data pesananmu setelah pembayaran terverifikasi dan meneruskannya ke dapur.
                     </p>
                   </div>
                 ) : (
-                  <div className="text-center space-y-1">
-                    <p className="text-xs text-slate-500">
+                  <div className="text-center space-y-2 max-w-md">
+                    <p className="text-sm text-slate-600">
                       Sistem melakukan verifikasi pembayaran untuk memastikan transaksi berhasil dan valid sesuai metode yang digunakan.
                     </p>
-                    <p className="text-xs text-slate-500">
-                      Link pembayaran sudah dibuka otomatis di tab baru, jadi kamu tidak perlu membuka halaman pembayaran secara manual.
+                    <p className="text-xs text-slate-400">
+                      Link pembayaran sudah dibuka otomatis di tab baru.
                     </p>
                   </div>
                 )}
               </div>
-              <div className="grid gap-4 rounded-2xl bg-slate-50 p-4 text-sm text-brand-dark sm:grid-cols-2">
+
+              <div className={`grid gap-4 rounded-2xl bg-slate-50/50 border border-slate-100 p-6 text-sm text-brand-dark ${!isQrisPaymentSuccess ? 'sm:grid-cols-2' : ''}`}>
                 <div>
-                  <p className="text-xs uppercase tracking-widest text-slate-500">Rangkuman Pembayaran</p>
-                  <ul className="mt-2 space-y-1">
-                    <li>Merchant ID: <span className="font-semibold">{MERCHANT_ID}</span></li>
-                    <li>Nomor Pesanan: <span className="font-semibold">{payload.orderCode}</span></li>
-                    <li>Total Pembayaran: <span className="font-semibold">{formatCurrency(payload.total)}</span></li>
+                  <p className="text-xs uppercase tracking-widest text-slate-500 font-bold">Rangkuman</p>
+                  <ul className="mt-3 space-y-2">
+                    <li className="flex justify-between">
+                      <span className="text-slate-500">Merchant</span>
+                      <span className="font-semibold">Cafe Kejora ({MERCHANT_ID})</span>
+                    </li>
+                    <li className="flex justify-between">
+                      <span className="text-slate-500">Order ID</span>
+                      <span className="font-semibold">{payload.orderCode}</span>
+                    </li>
+                    <li className="flex justify-between">
+                      <span className="text-slate-500">Total</span>
+                      <span className="font-semibold text-brand-accent">{formatCurrency(payload.total)}</span>
+                    </li>
                   </ul>
-                  <p className="mt-3 text-xs text-slate-600">
-                    Merchant ID Cafe Kejora ({MERCHANT_ID}), Nomor Pesanan ({payload.orderCode}), Total Pembayaran ({formatCurrency(payload.total)}) dan batas waktu pembayaran tercantum jelas agar kasir serta pelanggan memiliki referensi yang sama.
-                  </p>
                 </div>
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-slate-500">Batas Waktu Pembayaran</p>
-                  <p className="mt-2 font-semibold">
-                    {paymentDeadline
-                      ? paymentDeadline.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })
-                      : 'Menunggu data pesanan'}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">Invoice akan kadaluarsa otomatis setelah batas waktu ini.</p>
-                </div>
+                {!isQrisPaymentSuccess && (
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-slate-500 font-bold">Batas Waktu</p>
+                    <p className="mt-3 font-semibold text-lg">
+                      {paymentDeadline
+                        ? paymentDeadline.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })
+                        : '--:--'}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">Invoice kadaluarsa otomatis setelah waktu ini.</p>
+                  </div>
+                )}
               </div>
             </section>
           ) : (
-            <section className="bg-white rounded-2xl shadow p-6">
+            <section className="backdrop-blur-xl bg-white/80 border border-white/50 shadow-xl rounded-3xl p-8 space-y-6">
               {isCashPaymentSuccess ? (
-                <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 font-semibold">
-                  Pembayaran Berhasil - kasir telah memverifikasi dan pesananmu sedang diproses.
+                <div className="rounded-2xl border border-green-200 bg-green-50/50 p-6 flex gap-4 items-start">
+                  <div className="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-green-800">Pembayaran Berhasil</h3>
+                    <p className="text-sm text-green-700 mt-1">Kasir telah memverifikasi dan pesananmu sedang diproses.</p>
+                  </div>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">
-                  {payload.message ?? 'Silakan bayar di kasir dengan menunjukkan nomor pesanan ini.'}
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 p-6 text-center">
+                  <p className="text-slate-600 font-medium">Pesanan diterima, silakan bayar di kasir dengan menunjukkan nomor pesanan anda.</p>
                 </div>
               )}
-            </section>
-          )}
 
-          {isQris ? (
-            <>
-              <section className="bg-white rounded-2xl shadow p-6 space-y-4">
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-brand-accent">Timeline Pengalaman</p>
-                  <h2 className="text-xl font-semibold text-brand-dark">Bagaimana transaksi ini berlangsung</h2>
-                </div>
-                <ol className="space-y-4 text-sm text-brand-dark">
-                  <li className="rounded-2xl border border-slate-100 p-4">
-                    <p className="font-semibold">1. Halaman konfirmasi pembayaran</p>
-                    <p className="mt-1 text-slate-600">
-                      Sistem menampilkan QRIS dinamis lengkap dengan Merchant ID {MERCHANT_ID}, nomor pesanan {payload.orderCode}, total
-                      {` ${formatCurrency(payload.total)}`} dan batas waktu pembayaran sehingga pelanggan bisa langsung memindai kode.
-                    </p>
-                  </li>
-                  <li className="rounded-2xl border border-slate-100 p-4">
-                    <p className="font-semibold">2. Pemindaian kode QRIS</p>
-                    <p className="mt-1 text-slate-600">
-                      {isQrisPaymentSuccess
-                        ? 'Pembayaran terverifikasi otomatis. Pesan “Pembayaran Berhasil” muncul tanpa perlu membuka halaman invoice.'
-                        : 'Setelah pelanggan memindai QRIS dari aplikasi pembayaran, sistem menunggu verifikasi otomatis dari mitra pembayaran.'}
-                    </p>
-                  </li>
-                  <li className="rounded-2xl border border-slate-100 p-4">
-                    <p className="font-semibold">3. Notifikasi dashboard admin</p>
-                    <p className="mt-1 text-slate-600">
-                      Admin menerima popup “Pesanan Baru” yang berisi detail pelanggan dan status sehingga tim kasir bisa langsung menindaklanjuti.
-                    </p>
-                  </li>
-                  <li className="rounded-2xl border border-slate-100 p-4">
-                    <p className="font-semibold">4. Pengantaran hidangan</p>
-                    <p className="mt-1 text-slate-600">{kitchenStatusText}</p>
-                  </li>
-                </ol>
-              </section>
-
-              <section className="bg-white rounded-2xl shadow p-6 space-y-4">
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-brand-accent">Detail notifikasi admin</p>
-                  <h2 className="text-xl font-semibold text-brand-dark">Data yang dikirim ke dashboard</h2>
-                </div>
-                <dl className="grid gap-4 sm:grid-cols-2">
-                  {adminNotificationEntries.map((entry) => (
-                    <div key={entry.label} className="rounded-2xl border border-slate-100 p-4">
-                      <dt className="text-xs uppercase tracking-widest text-slate-500">{entry.label}</dt>
-                      <dd className="mt-1 font-semibold text-brand-dark">{entry.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
-
-              <section className="bg-white rounded-2xl shadow p-6 space-y-4">
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-brand-accent">Detail item</p>
-                  <h2 className="text-xl font-semibold text-brand-dark">{payload.items.length} menu</h2>
-                </div>
-                <div className="space-y-4">
-                  {payload.items.map((item, index) => (
-                    <div key={`${item.menu_id}-${index}`} className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
-                      <div>
-                        <p className="font-semibold text-brand-dark">{item.name}</p>
-                        <p className="text-xs text-slate-500">Qty {item.qty} × {formatCurrency(item.price)}</p>
-                        {item.note && <p className="text-xs text-brand-accent mt-1">Catatan: {item.note}</p>}
-                      </div>
-                      <p className="font-semibold text-brand-accent">{formatCurrency(item.price * item.qty)}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </>
-          ) : (
-            <section className="bg-white rounded-2xl shadow p-6 space-y-4">
               <div>
-                <p className="text-xs uppercase tracking-widest text-brand-accent">Tata cara pembayaran kasir</p>
-                <h2 className="text-xl font-semibold text-brand-dark">Langkah pembayaran manual</h2>
+                <p className="text-xs uppercase tracking-widest text-brand-accent font-bold mb-4">Tata cara pembayaran kasir</p>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/50 border border-white/60 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-accent/10 flex items-center justify-center text-brand-accent font-bold">1</div>
+                    <p className="text-sm text-slate-600 pt-1">
+                      Tunjukkan nomor pesanan <span className="font-bold text-brand-dark">{payload.orderCode}</span> dan total pembayaran
+                      <span className="font-bold text-brand-dark">{` ${formatCurrency(payload.total)}`}</span> kepada kasir.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-4 p-4 rounded-2xl bg-white/50 border border-white/60 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-accent/10 flex items-center justify-center text-brand-accent font-bold">2</div>
+                    <p className="text-sm text-slate-600 pt-1">
+                      Lakukan pembayaran sesuai nominal yang tertera, lalu tunggu kasir memverifikasi transaksi.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <ol className="space-y-4 text-sm text-brand-dark list-decimal list-inside">
-                <li className="rounded-2xl border border-slate-100 p-4">
-                  Tunjukkan nomor pesanan <span className="font-semibold text-brand-accent">{payload.orderCode}</span> dan total pembayaran
-                  {` ${formatCurrency(payload.total)}`} kepada kasir.
-                </li>
-                <li className="rounded-2xl border border-slate-100 p-4">
-                  Lakukan pembayaran sesuai nominal yang tertera, lalu tunggu kasir memverifikasi transaksi.
-                </li>
-                <li className="rounded-2xl border border-slate-100 p-4">
-                  Setelah kasir menandai pesanan sebagai lunas, dapur otomatis mulai memproses hidangan kamu.
-                </li>
-                <li className="rounded-2xl border border-slate-100 p-4">
-                  Simpan struk sebagai bukti dan duduk kembali di meja {payload.tableNumber}; tim kami akan mengantar pesanan.
-                </li>
-              </ol>
             </section>
           )}
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex justify-center pt-4">
             <button
               type="button"
               onClick={handleBackToMenu}
-              className="px-5 py-3 rounded-2xl border border-brand-accent text-brand-accent font-semibold hover:bg-brand-accent hover:text-white"
+              className="px-8 py-4 rounded-full bg-gradient-to-r from-gray-900 to-gray-800 text-white font-bold shadow-lg shadow-gray-900/20 hover:shadow-xl hover:scale-[1.02] transition-all active:scale-95"
             >
-              Kembali ke menu
+              Kembali ke Menu Utama
             </button>
           </div>
         </main>
@@ -539,4 +588,3 @@ export default function OrderSuccessPage() {
     </>
   );
 }
-
