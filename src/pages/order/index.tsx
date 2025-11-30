@@ -1,7 +1,7 @@
 ﻿/* eslint-disable @next/next/no-img-element */
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Menu } from '@/types/entities';
 import { publicGet } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
@@ -13,12 +13,11 @@ type CartItem = {
 };
 
 type CategoryFilter = {
-  id: number;
-  name: string;
+  id_kategori: number;
+  nama_kategori: string;
 };
 
 const TABLE_OPTIONS = Array.from({ length: 15 }, (_, index) => (index + 1).toString());
-const IMAGE_BASE_URL = (process.env.NEXT_PUBLIC_IMAGE_BASE_URL ?? '').replace(/\/$/, '');
 
 import { resolveMenuPhoto } from '@/lib/menuPhoto';
 
@@ -38,6 +37,7 @@ export default function OrderPage() {
   const [activeCategory, setActiveCategory] = useState<number | 'all'>('all');
   const [pendingDraft, setPendingDraft] = useState<CheckoutDraft | null>(null);
   const [draftApplied, setDraftApplied] = useState(false);
+  const restoredInfoRef = useRef(false);
 
   useEffect(() => {
     if (!router.isReady) {
@@ -61,12 +61,20 @@ export default function OrderPage() {
   }, []);
 
   useEffect(() => {
-    const storedDraft = readCheckoutDraft();
-    if (storedDraft) {
-      setPendingDraft(storedDraft);
-    } else {
-      setDraftApplied(true);
+    if (typeof window === 'undefined') {
+      return;
     }
+
+    const storedDraft = readCheckoutDraft();
+    const frame = window.requestAnimationFrame(() => {
+      if (storedDraft) {
+        setPendingDraft(storedDraft);
+      } else {
+        setDraftApplied(true);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -74,31 +82,34 @@ export default function OrderPage() {
       return;
     }
 
-    // Only restore name/table if there are actually items in the cart.
-    // If the cart is empty, we assume a fresh session and don't auto-fill user details.
-    if (pendingDraft.items.length > 0) {
-      if (!customerName && pendingDraft.customerName) {
-        setCustomerName(pendingDraft.customerName);
-      }
-      if (!tableNumber && pendingDraft.tableNumber) {
-        setTableNumber(pendingDraft.tableNumber);
-      }
-    }
-
     const nextCart: Record<number, CartItem> = {};
     pendingDraft.items.forEach((item) => {
-      const menu = menus.find((menuEntry) => menuEntry.id === item.menu_id);
+      const menu = menus.find((menuEntry) => menuEntry.id_menu === item.menu_id);
       if (menu) {
-        nextCart[menu.id] = { menu, qty: item.qty };
+        nextCart[menu.id_menu] = { menu, qty: item.qty };
       }
     });
 
-    if (Object.keys(nextCart).length > 0) {
-      setCart(nextCart);
-      setDrawerOpen(false);
-    }
+    const frame = window.requestAnimationFrame(() => {
+      if (!restoredInfoRef.current && pendingDraft.items.length > 0) {
+        if (!customerName && pendingDraft.customerName) {
+          setCustomerName(pendingDraft.customerName);
+        }
+        if (!tableNumber && pendingDraft.tableNumber) {
+          setTableNumber(pendingDraft.tableNumber);
+        }
+        restoredInfoRef.current = true;
+      }
 
-    setDraftApplied(true);
+      if (Object.keys(nextCart).length > 0) {
+        setCart(nextCart);
+        setDrawerOpen(false);
+      }
+
+      setDraftApplied(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [pendingDraft, draftApplied, menus, customerName, tableNumber]);
 
   // Smart Auto-Save
@@ -106,9 +117,9 @@ export default function OrderPage() {
     if (!draftApplied) return;
 
     const currentItems = Object.values(cart).map((item) => ({
-      menu_id: item.menu.id,
-      name: item.menu.name,
-      price: item.menu.price,
+      menu_id: item.menu.id_menu,
+      name: item.menu.nama_menu,
+      price: item.menu.harga_menu,
       qty: item.qty,
     }));
 
@@ -126,7 +137,7 @@ export default function OrderPage() {
 
   const cartItems = useMemo(() => Object.values(cart), [cart]);
   const cartTotal = useMemo(
-    () => cartItems.reduce((sum, item) => sum + item.menu.price * item.qty, 0),
+    () => cartItems.reduce((sum, item) => sum + item.menu.harga_menu * item.qty, 0),
     [cartItems]
   );
   const cartCount = useMemo(() => cartItems.reduce((sum, item) => sum + item.qty, 0), [cartItems]);
@@ -143,32 +154,32 @@ export default function OrderPage() {
   const categories = useMemo<CategoryFilter[]>(() => {
     const map = new Map<number, string>();
     menus.forEach((menu) => {
-      if (menu.category?.id) {
-        map.set(menu.category.id, menu.category.name);
+      if (menu.kategori?.id_kategori) {
+        map.set(menu.kategori.id_kategori, menu.kategori.nama_kategori);
       }
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    return Array.from(map.entries()).map(([id_kategori, nama_kategori]) => ({ id_kategori, nama_kategori }));
   }, [menus]);
 
   const filteredMenus = useMemo(() => {
     if (activeCategory === 'all') {
       return menus;
     }
-    return menus.filter((menu) => menu.category_id === activeCategory);
+    return menus.filter((menu) => menu.id_kategori === activeCategory);
   }, [menus, activeCategory]);
 
   const updateQty = (menu: Menu, delta: number) => {
     setCart((prev) => {
-      const current = prev[menu.id];
+      const current = prev[menu.id_menu];
       const nextQty = (current?.qty ?? 0) + delta;
       let nextState: Record<number, CartItem>;
       if (nextQty <= 0) {
         nextState = { ...prev };
-        delete nextState[menu.id];
+        delete nextState[menu.id_menu];
       } else {
         nextState = {
           ...prev,
-          [menu.id]: { menu, qty: nextQty },
+          [menu.id_menu]: { menu, qty: nextQty },
         };
       }
       if (Object.keys(nextState).length === 0) {
@@ -189,13 +200,8 @@ export default function OrderPage() {
     });
   };
 
-  const handleAddMenu = (menu: Menu) => {
-    updateQty(menu, 1);
-    setToast('Menu berhasil ditambahkan ke keranjang');
-  };
-
   const handleOpenDetail = (menu: Menu) => {
-    const cartItem = getMenuInCart(menu.id);
+    const cartItem = getMenuInCart(menu.id_menu);
     setDetailMenu(menu);
     setDetailQty(cartItem?.qty ?? 1);
   };
@@ -212,7 +218,7 @@ export default function OrderPage() {
     const targetQty = Math.max(1, detailQty);
     setCart((prev) => ({
       ...prev,
-      [detailMenu.id]: {
+      [detailMenu.id_menu]: {
         menu: detailMenu,
         qty: targetQty,
       },
@@ -242,9 +248,9 @@ export default function OrderPage() {
       customerName: customerName.trim(),
       tableNumber,
       items: cartItems.map((item) => ({
-        menu_id: item.menu.id,
-        name: item.menu.name,
-        price: item.menu.price,
+        menu_id: item.menu.id_menu,
+        name: item.menu.nama_menu,
+        price: item.menu.harga_menu,
         qty: item.qty,
       })),
       createdAt: new Date().toISOString(),
@@ -414,15 +420,15 @@ export default function OrderPage() {
                   </button>
                   {categories.map((category) => (
                     <button
-                      key={category.id}
+                      key={category.id_kategori}
                       type="button"
-                      onClick={() => setActiveCategory(category.id)}
-                      className={`px-5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${activeCategory === category.id
+                      onClick={() => setActiveCategory(category.id_kategori)}
+                      className={`px-5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${activeCategory === category.id_kategori
                         ? 'bg-brand-accent text-brand-dark shadow-md shadow-brand-accent/20'
                         : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
                         }`}
                     >
-                      {category.name}
+                      {category.nama_kategori}
                     </button>
                   ))}
                 </div>
@@ -450,25 +456,25 @@ export default function OrderPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredMenus.map((menu) => {
                   const photo = resolveMenuPhoto(menu);
-                  const cartItem = getMenuInCart(menu.id);
+                  const cartItem = getMenuInCart(menu.id_menu);
                   const isInCart = !!cartItem;
 
                   return (
                     <article
-                      key={menu.id}
+                      key={menu.id_menu}
                       className="group bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300 flex flex-col cursor-pointer relative"
                       onClick={() => handleOpenDetail(menu)}
                     >
                       <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
                         <img
                           src={photo}
-                          alt={menu.name}
+                          alt={menu.nama_menu}
                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                           loading="lazy"
                         />
                         <div className="absolute top-3 left-3">
                           <span className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-brand-dark shadow-sm">
-                            {menu.category?.name ?? 'Menu'}
+                            {menu.kategori?.nama_kategori ?? 'Menu'}
                           </span>
                         </div>
 
@@ -476,8 +482,8 @@ export default function OrderPage() {
 
                       <div className="p-5 flex flex-col flex-1">
                         <div className="flex justify-between items-start gap-2 mb-2">
-                          <h3 className="font-bold text-lg text-brand-dark line-clamp-1 transition-colors" title={menu.name}>{menu.name}</h3>
-                          <span className="font-bold text-brand-DEFAULT whitespace-nowrap">{formatCurrency(menu.price)}</span>
+                          <h3 className="font-bold text-lg text-brand-dark line-clamp-1 transition-colors" title={menu.nama_menu}>{menu.nama_menu}</h3>
+                          <span className="font-bold text-brand-DEFAULT whitespace-nowrap">{formatCurrency(menu.harga_menu)}</span>
                         </div>
 
 
@@ -503,7 +509,7 @@ export default function OrderPage() {
                         ) : (
                           /* Description (When not in cart) */
                           <p className="text-sm text-gray-500 mt-2 line-clamp-2 min-h-[2.5rem]">
-                            {menu.description || 'Nikmati cita rasa istimewa dari menu andalan kami.'}
+                            {menu.deskripsi_menu || 'Nikmati cita rasa istimewa dari menu andalan kami.'}
                           </p>
                         )}
                       </div>
@@ -574,8 +580,8 @@ export default function OrderPage() {
             <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
               <div className="relative h-64 bg-gray-100">
                 <img
-                  src={detailMenu.photo_path ? resolveMenuPhoto(detailMenu) : `https://picsum.photos/seed/kejora-${detailMenu.id}/600/400`}
-                  alt={detailMenu.name}
+                  src={detailMenu.foto_menu ? resolveMenuPhoto(detailMenu) : `https://picsum.photos/seed/kejora-${detailMenu.id_menu}/600/400`}
+                  alt={detailMenu.nama_menu}
                   className="h-full w-full object-cover"
                 />
                 <button
@@ -589,13 +595,13 @@ export default function OrderPage() {
 
               <div className="p-6 flex flex-col flex-1 overflow-y-auto">
                 <div className="mb-4">
-                  <span className="text-xs font-bold tracking-wider text-brand-accent uppercase mb-1 block">{detailMenu.category?.name ?? 'Menu'}</span>
-                  <h3 className="text-2xl font-bold text-brand-dark mb-2">{detailMenu.name}</h3>
-                  <p className="text-xl font-semibold text-brand-DEFAULT">{formatCurrency(detailMenu.price)}</p>
+                  <span className="text-xs font-bold tracking-wider text-brand-accent uppercase mb-1 block">{detailMenu.kategori?.nama_kategori ?? 'Menu'}</span>
+                  <h3 className="text-2xl font-bold text-brand-dark mb-2">{detailMenu.nama_menu}</h3>
+                  <p className="text-xl font-semibold text-brand-DEFAULT">{formatCurrency(detailMenu.harga_menu)}</p>
                 </div>
 
                 <p className="text-gray-600 text-sm leading-relaxed mb-6">
-                  {detailMenu.description ?? 'Deskripsi menu akan segera diperbarui.'}
+                  {detailMenu.deskripsi_menu ?? 'Deskripsi menu akan segera diperbarui.'}
                 </p>
 
                 <div className="mt-auto space-y-4">
@@ -625,7 +631,7 @@ export default function OrderPage() {
                     onClick={handleAddDetailToCart}
                     className="w-full bg-brand-dark text-white font-bold py-3.5 rounded-xl hover:bg-brand-DEFAULT transition-colors shadow-lg"
                   >
-                    Tambah ke Keranjang - {formatCurrency(detailMenu.price * detailQty)}
+                    Tambah ke Keranjang - {formatCurrency(detailMenu.harga_menu * detailQty)}
                   </button>
                 </div>
               </div>
@@ -649,22 +655,22 @@ export default function OrderPage() {
 
               <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#f8f8f8]">
                 {cartItems.map((item) => (
-                  <div key={item.menu.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex gap-4">
+                  <div key={item.menu.id_menu} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex gap-4">
                     <div className="h-16 w-16 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
-                      <img src={resolveMenuPhoto(item.menu)} alt={item.menu.name} className="h-full w-full object-cover" />
+                      <img src={resolveMenuPhoto(item.menu)} alt={item.menu.nama_menu} className="h-full w-full object-cover" />
                     </div>
                     <div className="flex-1 flex flex-col justify-between">
                       <div className="flex justify-between items-start">
-                        <h4 className="font-bold text-brand-dark text-sm line-clamp-1">{item.menu.name}</h4>
+                        <h4 className="font-bold text-brand-dark text-sm line-clamp-1">{item.menu.nama_menu}</h4>
                         <button
                           type="button"
-                          onClick={() => removeItem(item.menu.id)}
+                          onClick={() => removeItem(item.menu.id_menu)}
                           className="text-gray-400 hover:text-red-500 transition-colors"
                         >
                           <i className="fas fa-trash-alt text-xs"></i>
                         </button>
                       </div>
-                      <p className="text-xs text-brand-DEFAULT font-semibold">{formatCurrency(item.menu.price)}</p>
+                      <p className="text-xs text-brand-DEFAULT font-semibold">{formatCurrency(item.menu.harga_menu)}</p>
 
                       <div className="flex items-center justify-end gap-3 mt-2">
                         <button

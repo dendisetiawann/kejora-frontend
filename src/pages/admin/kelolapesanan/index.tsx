@@ -1,93 +1,94 @@
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { useNotification } from '@/contexts/NotificationContext';
 import { adminGet } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
-import { Order } from '@/types/entities';
+import { Pesanan } from '@/types/entities';
 
 type HistoryFilter = 'today' | 'week' | 'month' | 'year' | 'custom';
 
-export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+export default function KelolaPesananPage() {
+  const [orders, setOrders] = useState<Pesanan[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('today');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
-  const { latestOrder, refreshOrders } = useNotification();
+  const { latestOrder } = useNotification();
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await adminGet<Order[]>('/admin/orders');
+      const data = await adminGet<Pesanan[]>('/admin/kelolapesanan');
       setOrders(data);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [fetchOrders]);
 
-  // Refresh orders when a new global notification arrives
   useEffect(() => {
     if (latestOrder) {
       fetchOrders();
     }
-  }, [latestOrder]);
+  }, [latestOrder, fetchOrders]);
 
-  const filteredOrders = orders.filter((order) => {
-    if (activeTab === 'active') {
-      return ['baru', 'diproses'].includes(order.order_status) ||
-        (order.payment_status === 'pending' && order.order_status !== 'selesai' && order.order_status !== 'batal') ||
-        (order.payment_status === 'belum_bayar' && order.order_status !== 'selesai' && order.order_status !== 'batal');
-    }
+  const filteredOrders = orders
+    .filter((order) => {
+      if (activeTab === 'active') {
+        return (
+          ['baru', 'diproses'].includes(order.status_pesanan) ||
+          (order.status_pembayaran === 'pending' && order.status_pesanan !== 'selesai' && order.status_pesanan !== 'batal') ||
+          (order.status_pembayaran === 'belum_bayar' && order.status_pesanan !== 'selesai' && order.status_pesanan !== 'batal')
+        );
+      }
 
-    if (!['selesai', 'batal'].includes(order.order_status)) return false;
+      if (!['selesai', 'batal'].includes(order.status_pesanan)) return false;
 
+      const orderDate = new Date(order.tanggal_dibuat ?? 0);
+      const now = new Date();
 
+      if (historyFilter === 'today') {
+        return orderDate.toDateString() === now.toDateString();
+      }
 
-    const orderDate = new Date(order.created_at ?? 0);
-    const now = new Date();
+      if (historyFilter === 'week') {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(now.getDate() - 7);
+        return orderDate >= oneWeekAgo;
+      }
 
-    if (historyFilter === 'today') {
-      return orderDate.toDateString() === now.toDateString();
-    }
+      if (historyFilter === 'month') {
+        return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
+      }
 
-    if (historyFilter === 'week') {
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(now.getDate() - 7);
-      return orderDate >= oneWeekAgo;
-    }
+      if (historyFilter === 'year') {
+        return orderDate.getFullYear() === now.getFullYear();
+      }
 
-    if (historyFilter === 'month') {
-      return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
-    }
+      if (historyFilter === 'custom') {
+        if (!customStartDate && !customEndDate) return true;
+        const start = customStartDate ? new Date(customStartDate) : new Date(0);
+        const end = customEndDate ? new Date(customEndDate) : new Date();
+        end.setHours(23, 59, 59, 999);
+        return orderDate >= start && orderDate <= end;
+      }
 
-    if (historyFilter === 'year') {
-      return orderDate.getFullYear() === now.getFullYear();
-    }
+      return true;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.tanggal_dibuat ?? 0).getTime();
+      const dateB = new Date(b.tanggal_dibuat ?? 0).getTime();
 
-    if (historyFilter === 'custom') {
-      if (!customStartDate && !customEndDate) return true;
-      const start = customStartDate ? new Date(customStartDate) : new Date(0);
-      const end = customEndDate ? new Date(customEndDate) : new Date();
-      end.setHours(23, 59, 59, 999); // Include the whole end day
-      return orderDate >= start && orderDate <= end;
-    }
-
-    return true;
-  }).sort((a, b) => {
-    const dateA = new Date(a.created_at ?? 0).getTime();
-    const dateB = new Date(b.created_at ?? 0).getTime();
-
-    if (activeTab === 'active') {
-      return dateA - dateB;
-    }
-    return dateB - dateA;
-  });
+      if (activeTab === 'active') {
+        return dateA - dateB;
+      }
+      return dateB - dateA;
+    });
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
@@ -95,33 +96,43 @@ export default function OrdersPage() {
       weekday: 'long',
       day: '2-digit',
       month: 'long',
-      year: 'numeric'
+      year: 'numeric',
     });
   };
 
-  const getStatusBadge = (order: Order) => {
-    if (order.order_status === 'selesai') {
-      return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">Pesanan Selesai</span>;
+  const getStatusBadge = (order: Pesanan) => {
+    if (order.status_pesanan === 'selesai') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
+          Pesanan Selesai
+        </span>
+      );
     }
 
-    if (order.payment_method === 'cash' && order.payment_status === 'belum_bayar') {
-      return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 whitespace-nowrap">Pesanan Belum Dibayar</span>;
+    if (order.metode_pembayaran === 'cash' && order.status_pembayaran === 'belum_bayar') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 whitespace-nowrap">
+          Pesanan Belum Dibayar
+        </span>
+      );
     }
 
-    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">Pesanan Diproses</span>;
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
+        Pesanan Diproses
+      </span>
+    );
   };
 
   const totalRevenue = filteredOrders.reduce((acc, order) => {
-    if (order.order_status === 'selesai' || order.payment_status === 'dibayar') {
-      return acc + Number(order.total_amount);
+    if (order.status_pesanan === 'selesai' || order.status_pembayaran === 'dibayar') {
+      return acc + Number(order.total_harga);
     }
     return acc;
   }, 0);
 
   return (
     <AdminLayout title="Kelola Pesanan">
-
-
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -166,19 +177,17 @@ export default function OrdersPage() {
             <div className="flex bg-gray-100 p-1 rounded-lg">
               <button
                 onClick={() => setActiveTab('active')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'active'
-                  ? 'bg-white text-brand-dark shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  activeTab === 'active' ? 'bg-white text-brand-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
               >
                 Pesanan Aktif
               </button>
               <button
                 onClick={() => setActiveTab('history')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'history'
-                  ? 'bg-white text-brand-dark shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  activeTab === 'history' ? 'bg-white text-brand-dark shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
               >
                 Riwayat Pesanan
               </button>
@@ -212,25 +221,21 @@ export default function OrdersPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-brand-dark">{order.order_number || `#${order.id}`}</td>
-                  <td className="px-6 py-4 font-medium text-gray-900">{order.customer_name}</td>
-                  <td className="px-6 py-4 text-gray-500 whitespace-nowrap">
-                    {formatDate(order.created_at)}
-                  </td>
+                <tr key={order.id_pesanan} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-4 font-bold text-brand-dark">{order.nomor_pesanan || `#${order.id_pesanan}`}</td>
+                  <td className="px-6 py-4 font-medium text-gray-900">{order.nama_pelanggan || order.pelanggan?.nama_pelanggan || '-'}</td>
+                  <td className="px-6 py-4 text-gray-500 whitespace-nowrap">{formatDate(order.tanggal_dibuat)}</td>
                   <td className="px-6 py-4">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                      {order.table_number}
+                      {order.nomor_meja || order.pelanggan?.nomor_meja || '-'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-bold text-brand-accent">{formatCurrency(order.total_amount)}</td>
-                  <td className="px-6 py-4 text-gray-600 uppercase text-xs font-bold tracking-wider">{order.payment_method}</td>
-                  <td className="px-6 py-4">
-                    {getStatusBadge(order)}
-                  </td>
+                  <td className="px-6 py-4 font-bold text-brand-accent">{formatCurrency(order.total_harga)}</td>
+                  <td className="px-6 py-4 text-gray-600 uppercase text-xs font-bold tracking-wider">{order.metode_pembayaran}</td>
+                  <td className="px-6 py-4">{getStatusBadge(order)}</td>
                   <td className="px-6 py-4 text-right">
                     <Link
-                      href={`/admin/orders/${order.id}`}
+                      href={`/admin/kelolapesanan/${order.id_pesanan}`}
                       className="inline-flex items-center px-3 py-1.5 border border-brand-accent text-brand-accent rounded-lg text-xs font-bold hover:bg-brand-accent hover:text-brand-dark transition-colors"
                     >
                       Lihat Detail
@@ -243,7 +248,10 @@ export default function OrdersPage() {
                   <td colSpan={8} className="text-center py-12 text-gray-400">
                     <div className="flex flex-col items-center justify-center">
                       <i className="fas fa-clipboard-list text-4xl mb-3 opacity-20"></i>
-                      <p>Tidak ada pesanan {activeTab === 'active' ? 'aktif' : 'dalam riwayat'} {activeTab === 'history' ? 'untuk periode ini' : ''}.</p>
+                      <p>
+                        Tidak ada pesanan {activeTab === 'active' ? 'aktif' : 'dalam riwayat'}{' '}
+                        {activeTab === 'history' ? 'untuk periode ini' : ''}.
+                      </p>
                     </div>
                   </td>
                 </tr>

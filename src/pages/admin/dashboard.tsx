@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
 import { adminGet } from '@/lib/api';
-import { Order, Menu, Category } from '@/types/entities';
+import { Pesanan, Menu, Kategori } from '@/types/entities';
 import { formatCurrency } from '@/lib/format';
 
-export default function DashboardPage() {
+export default function AdminDashboardPage() {
   const [stats, setStats] = useState({
     ordersCount: 0,
     revenue: 0,
@@ -21,9 +21,9 @@ export default function DashboardPage() {
     const loadData = async () => {
       try {
         const [orders, menus, categories] = await Promise.all([
-          adminGet<Order[]>('/admin/orders'),
-          adminGet<Menu[]>('/admin/menus'),
-          adminGet<Category[]>('/admin/categories'),
+          adminGet<Pesanan[]>('/admin/kelolapesanan'),
+          adminGet<Menu[]>('/admin/kelolamenu'),
+          adminGet<Kategori[]>('/admin/kelolakategori'),
         ]);
 
         const now = new Date();
@@ -31,28 +31,28 @@ export default function DashboardPage() {
         const currentYear = now.getFullYear();
 
         const monthlyOrders = orders.filter((o) => {
-          const orderDate = new Date(o.created_at || '');
+          const orderDate = new Date(o.tanggal_dibuat || '');
           return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
         });
 
         const revenue = monthlyOrders
-          .filter(o => o.order_status === 'selesai' || o.payment_status === 'dibayar')
-          .reduce((acc, curr) => acc + Number(curr.total_amount), 0);
+          .filter(o => o.status_pesanan === 'selesai' || o.status_pembayaran === 'dibayar')
+          .reduce((acc, curr) => acc + Number(curr.total_harga), 0);
 
         const itemsSold = monthlyOrders
-          .filter(o => o.order_status === 'selesai' || o.payment_status === 'dibayar')
+          .filter(o => o.status_pesanan === 'selesai' || o.status_pembayaran === 'dibayar')
           .reduce((acc, curr) => {
-            const orderItemsCount = curr.items?.reduce((itemAcc, item) => itemAcc + item.qty, 0) || 0;
+            const orderItemsCount = curr.items?.reduce((itemAcc, item) => itemAcc + item.quantity, 0) || 0;
             return acc + orderItemsCount;
           }, 0);
 
         // Calculate Best Seller
         const itemCounts: Record<string, number> = {};
         monthlyOrders.forEach((o) => {
-          if (o.order_status === 'selesai' || o.payment_status === 'dibayar') {
+          if (o.status_pesanan === 'selesai' || o.status_pembayaran === 'dibayar') {
             o.items?.forEach((i) => {
-              const name = i.menu?.name || 'Unknown';
-              itemCounts[name] = (itemCounts[name] || 0) + i.qty;
+              const name = i.menu?.nama_menu || 'Unknown';
+              itemCounts[name] = (itemCounts[name] || 0) + i.quantity;
             });
           }
         });
@@ -71,9 +71,9 @@ export default function DashboardPage() {
         const dailyRevenue = new Array(daysInMonth).fill(0);
 
         monthlyOrders.forEach((o) => {
-          if (o.order_status === 'selesai' || o.payment_status === 'dibayar') {
-            const day = new Date(o.created_at || '').getDate();
-            dailyRevenue[day - 1] += Number(o.total_amount);
+          if (o.status_pesanan === 'selesai' || o.status_pembayaran === 'dibayar') {
+            const day = new Date(o.tanggal_dibuat || '').getDate();
+            dailyRevenue[day - 1] += Number(o.total_harga);
           }
         });
 
@@ -141,19 +141,19 @@ export default function DashboardPage() {
     {
       title: 'Kelola Pesanan',
       icon: 'fa-plus',
-      href: '/admin/orders',
+      href: '/admin/kelolapesanan',
       color: 'bg-blue-600 hover:bg-blue-700',
     },
     {
       title: 'Kelola Menu',
       icon: 'fa-burger',
-      href: '/admin/menus',
+      href: '/admin/kelolamenu',
       color: 'bg-emerald-600 hover:bg-emerald-700',
     },
     {
       title: 'Kelola Kategori',
       icon: 'fa-tags',
-      href: '/admin/categories',
+      href: '/admin/kelolakategori',
       color: 'bg-purple-600 hover:bg-purple-700',
     },
   ];

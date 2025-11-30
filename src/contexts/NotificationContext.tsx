@@ -1,12 +1,12 @@
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { adminGet } from '@/lib/api';
-import { Order } from '@/types/entities';
+import { Pesanan } from '@/types/entities';
 
 interface NotificationContextType {
     unreadCount: number;
     showBanner: boolean;
-    latestOrder: Order | null;
+    latestOrder: Pesanan | null;
     dismissBanner: () => void;
     clearUnread: () => void;
     refreshOrders: () => Promise<void>;
@@ -17,14 +17,11 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: ReactNode }) {
     const [unreadCount, setUnreadCount] = useState(0);
     const [showBanner, setShowBanner] = useState(false);
-    const [latestOrder, setLatestOrder] = useState<Order | null>(null);
+    const [latestOrder, setLatestOrder] = useState<Pesanan | null>(null);
 
-    const previousOrdersRef = useRef<Order[]>([]);
+    const previousOrdersRef = useRef<Pesanan[]>([]);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const router = useRouter();
-
-    // Simple beep sound (base64)
-    const beepSound = 'data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU'; // Shortened placeholder, will use a real one
 
     useEffect(() => {
         audioRef.current = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
@@ -36,9 +33,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const fetchOrders = async () => {
+    const fetchOrders = useCallback(async () => {
         try {
-            const data = await adminGet<Order[]>('/admin/orders');
+            const data = await adminGet<Pesanan[]>('/admin/kelolapesanan');
 
             // Initial load
             if (previousOrdersRef.current.length === 0) {
@@ -48,7 +45,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
             // Check for new orders (id not in previous list)
             const newOrders = data.filter(
-                (o) => !previousOrdersRef.current.find((prev) => prev.id === o.id) && o.order_status === 'baru'
+                (o) => !previousOrdersRef.current.find((prev) => prev.id_pesanan === o.id_pesanan) && o.status_pesanan === 'baru'
             );
 
             if (newOrders.length > 0) {
@@ -67,7 +64,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         } catch (error) {
             console.error('Failed to poll orders:', error);
         }
-    };
+    }, []);
 
     useEffect(() => {
         // Only poll on admin pages and not on login
@@ -77,8 +74,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
         // Poll every 10 seconds
         const interval = setInterval(fetchOrders, 10000);
+        fetchOrders();
         return () => clearInterval(interval);
-    }, [router.pathname]);
+    }, [router.pathname, fetchOrders]);
 
     const dismissBanner = () => {
         setShowBanner(false);

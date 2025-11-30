@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import { ReactNode, useEffect, useState } from 'react';
 import { adminGet, clearToken, getToken } from '@/lib/api';
 import { useNotification } from '@/contexts/NotificationContext';
-import { User } from '@/types/entities';
+import { Pengguna } from '@/types/entities';
 
 type Props = {
   title: string;
@@ -13,14 +13,14 @@ type Props = {
 
 const navItems = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: 'fa-tachometer-alt' },
-  { label: 'Kelola Pesanan', href: '/admin/orders', icon: 'fa-clipboard-list' },
-  { label: 'Kelola Menu', href: '/admin/menus', icon: 'fa-utensils' },
-  { label: 'Kelola Kategori', href: '/admin/categories', icon: 'fa-layer-group' },
+  { label: 'Kelola Pesanan', href: '/admin/kelolapesanan', icon: 'fa-clipboard-list' },
+  { label: 'Kelola Menu', href: '/admin/kelolamenu', icon: 'fa-utensils' },
+  { label: 'Kelola Kategori', href: '/admin/kelolakategori', icon: 'fa-layer-group' },
 ];
 
 export default function AdminLayout({ title, children }: Props) {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<Pengguna | null>(null);
   const { unreadCount, showBanner, latestOrder, dismissBanner, clearUnread } = useNotification();
   const [loading, setLoading] = useState(true);
 
@@ -48,7 +48,7 @@ export default function AdminLayout({ title, children }: Props) {
       return;
     }
 
-    adminGet<User>('/admin/me')
+    adminGet<Pengguna>('/admin/me')
       .then(setUser)
       .catch(() => {
         clearToken();
@@ -86,11 +86,12 @@ export default function AdminLayout({ title, children }: Props) {
               <div className="flex-1 min-w-0">
                 <h4 className="text-sm font-bold text-brand-dark">Pesanan Baru!</h4>
                 <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                  Pesanan baru dari <span className="font-medium text-gray-700">{latestOrder.customer_name}</span>
+                  Pesanan baru dari{' '}
+                  <span className="font-medium text-gray-700">{latestOrder.nama_pelanggan || latestOrder.pelanggan?.nama_pelanggan || 'Pelanggan'}</span>
                 </p>
                 <div className="mt-2 flex gap-3">
                   <Link
-                    href={`/admin/orders/${latestOrder.id}`}
+                    href={`/admin/kelolapesanan/${latestOrder.id_pesanan}`}
                     onClick={dismissBanner}
                     className="text-xs font-semibold text-brand-accent hover:text-brand-dark transition-colors"
                   >
@@ -154,7 +155,7 @@ export default function AdminLayout({ title, children }: Props) {
                   <div className="max-h-64 overflow-y-auto">
                     {unreadCount > 0 ? (
                       <div className="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => {
-                        router.push('/admin/orders');
+                        router.push('/admin/kelolapesanan');
                         setIsNotificationOpen(false);
                       }}>
                         <div className="flex gap-3">
@@ -181,7 +182,7 @@ export default function AdminLayout({ title, children }: Props) {
                   {unreadCount > 0 && (
                     <div className="border-t border-gray-100 p-2">
                       <Link
-                        href="/admin/orders"
+                        href="/admin/kelolapesanan"
                         onClick={() => setIsNotificationOpen(false)}
                         className="block w-full text-center py-2 text-xs font-semibold text-brand-dark hover:bg-gray-50 rounded-lg transition-colors"
                       >
@@ -193,7 +194,7 @@ export default function AdminLayout({ title, children }: Props) {
               )}
             </div>
 
-            <span className="hidden sm:block text-sm text-slate-500">Halo, {user?.name}</span>
+            <span className="hidden sm:block text-sm text-slate-500">Halo, {user?.nama_pengguna}</span>
 
             <div className="relative">
               <button
@@ -210,7 +211,7 @@ export default function AdminLayout({ title, children }: Props) {
                   className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-2 animate-fade-in-down origin-top-right z-50"
                 >
                   <div className="px-4 py-3 border-b border-gray-100 sm:hidden">
-                    <p className="text-sm font-semibold text-brand-dark">{user?.name}</p>
+                    <p className="text-sm font-semibold text-brand-dark">{user?.nama_pengguna}</p>
                     <p className="text-xs text-gray-500">{user?.username}</p>
                   </div>
 

@@ -1,5 +1,5 @@
 ﻿import type { DraftItem } from '@/lib/checkoutDraft';
-import type { Order } from '@/types/entities';
+import type { Pesanan } from '@/types/entities';
 
 export type OrderSuccessPayload = {
   orderId: number;
@@ -13,8 +13,8 @@ export type OrderSuccessPayload = {
   snapToken?: string | null;
   message?: string | null;
   createdAt: string;
-  paymentStatus?: Order['payment_status'];
-  orderStatus?: Order['order_status'];
+  paymentStatus?: Pesanan['status_pembayaran'];
+  orderStatus?: Pesanan['status_pesanan'];
 };
 
 const ORDER_SUCCESS_KEY = 'kejora_order_success';

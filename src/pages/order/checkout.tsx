@@ -1,7 +1,7 @@
 ﻿import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { Order } from '@/types/entities';
+import { Pesanan } from '@/types/entities';
 import { publicPost } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { extractErrorMessage } from '@/lib/errors';
@@ -12,7 +12,7 @@ type PaymentMethod = 'cash' | 'qris';
 
 type OrderResponse = {
   message: string;
-  order: Order;
+  order: Pesanan;
   snap_token?: string | null;
 };
 
@@ -88,8 +88,6 @@ export default function OrderCheckoutPage() {
     return draft.items.reduce((sum, item) => sum + item.price * item.qty, 0);
   }, [draft]);
 
-  const orderTime = draft ? new Date(draft.createdAt) : null;
-
   const handleSubmit = async () => {
     if (!draft) {
       return;
@@ -105,16 +103,15 @@ export default function OrderCheckoutPage() {
         items: draft.items.map((item) => ({
           menu_id: item.menu_id,
           qty: item.qty,
-          note: item.note,
         })),
       };
 
       const response = await publicPost<OrderResponse>('/public/orders', payload);
       clearCheckoutDraft();
-      const createdAt = response.order.created_at ?? new Date().toISOString();
+      const createdAt = response.order.tanggal_dibuat ?? new Date().toISOString();
       saveOrderSuccess({
-        orderId: response.order.id,
-        orderCode: response.order.order_number || response.order.midtrans_order_id || `ORD-${response.order.id}`,
+        orderId: response.order.id_pesanan,
+        orderCode: response.order.nomor_pesanan || response.order.id_transaksi_qris || `ORD-${response.order.id_pesanan}`,
         customerName: draft.customerName,
         tableNumber: draft.tableNumber,
         paymentMethod,
@@ -124,8 +121,8 @@ export default function OrderCheckoutPage() {
         snapToken: response.snap_token ?? null,
         message: response.message,
         createdAt,
-        paymentStatus: response.order.payment_status,
-        orderStatus: response.order.order_status,
+        paymentStatus: response.order.status_pembayaran,
+        orderStatus: response.order.status_pesanan,
       });
 
       router.replace('/order/success');

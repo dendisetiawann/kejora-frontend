@@ -31,8 +31,8 @@ const buildStorageUrl = (path: string): string => {
 
 export const resolveMenuPhoto = (menu: Menu): string => {
     // Use uploaded photo if available
-    if (menu.photo_path && menu.photo_path.trim()) {
-        const sanitized = menu.photo_path.trim();
+    if (menu.foto_menu && menu.foto_menu.trim()) {
+        const sanitized = menu.foto_menu.trim();
         // If it's already a full URL, return it as-is
         if (sanitized.startsWith('http://') || sanitized.startsWith('https://')) {
             return sanitized;

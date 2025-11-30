@@ -2,25 +2,24 @@ import { FormEvent, useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { adminDelete, adminGet, adminPost, adminPut } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errors';
-import { Category } from '@/types/entities';
+import { Kategori } from '@/types/entities';
 
-export default function CategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [name, setName] = useState('');
+export default function KelolaKategoriPage() {
+  const [categories, setCategories] = useState<Kategori[]>([]);
+  const [namaKategori, setNamaKategori] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Notification State
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; message: string; onConfirm: () => void } | null>(null);
 
   const loadCategories = async () => {
     setLoading(true);
     try {
-      const data = await adminGet<Category[]>('/admin/categories');
+      const data = await adminGet<Kategori[]>('/admin/kelolakategori');
       setCategories(data);
     } finally {
       setLoading(false);
@@ -31,7 +30,6 @@ export default function CategoriesPage() {
     loadCategories();
   }, []);
 
-  // Auto-dismiss notification
   useEffect(() => {
     if (notification) {
       const timer = setTimeout(() => setNotification(null), 3000);
@@ -48,8 +46,7 @@ export default function CategoriesPage() {
     setSaving(true);
     setError(null);
 
-    // Client-side validation
-    if (!name.trim()) {
+    if (!namaKategori.trim()) {
       setError('Nama kategori tidak boleh kosong.');
       setSaving(false);
       return;
@@ -57,13 +54,13 @@ export default function CategoriesPage() {
 
     try {
       if (editingId) {
-        await adminPut(`/admin/categories/${editingId}`, { name });
+        await adminPut(`/admin/kelolakategori/${editingId}`, { nama_kategori: namaKategori });
         showNotification('Kategori berhasil diperbarui');
       } else {
-        await adminPost('/admin/categories', { name });
+        await adminPost('/admin/kelolakategori', { nama_kategori: namaKategori });
         showNotification('Kategori berhasil ditambahkan');
       }
-      setName('');
+      setNamaKategori('');
       setEditingId(null);
       setModalOpen(false);
       loadCategories();
@@ -74,14 +71,14 @@ export default function CategoriesPage() {
     }
   };
 
-  const handleEdit = (category: Category) => {
-    setEditingId(category.id);
-    setName(category.name);
+  const handleEdit = (category: Kategori) => {
+    setEditingId(category.id_kategori);
+    setNamaKategori(category.nama_kategori);
     setError(null);
     setModalOpen(true);
   };
 
-  const handleDeleteClick = (category: Category) => {
+  const handleDeleteClick = (category: Kategori) => {
     setConfirmModal({
       isOpen: true,
       message: 'Apakah Anda yakin ingin menghapus kategori ini?',
@@ -89,29 +86,33 @@ export default function CategoriesPage() {
     });
   };
 
-  const performDelete = async (category: Category) => {
-    setConfirmModal(null); // Close modal
+  const performDelete = async (category: Kategori) => {
+    setConfirmModal(null);
     try {
-      await adminDelete(`/admin/categories/${category.id}`);
+      await adminDelete(`/admin/kelolakategori/${category.id_kategori}`);
       showNotification('Kategori berhasil dihapus');
       loadCategories();
     } catch (err: unknown) {
-      showNotification(extractErrorMessage(err, 'Kategori tidak dapat dihapus karena masih digunakan oleh menu aktif.'), 'error');
+      showNotification(
+        extractErrorMessage(err, 'Kategori tidak dapat dihapus karena masih digunakan oleh menu aktif.'),
+        'error'
+      );
     }
   };
 
   return (
     <AdminLayout title="Kelola Kategori">
-      {/* Toast Notification */}
       {notification && (
-        <div className={`fixed top-6 right-6 z-[60] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-slide-in-right ${notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-          }`}>
+        <div
+          className={`fixed top-6 right-6 z-[60] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-slide-in-right ${
+            notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+          }`}
+        >
           <i className={`fas ${notification.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} text-xl`}></i>
           <span className="font-semibold">{notification.message}</span>
         </div>
       )}
 
-      {/* Confirmation Modal */}
       {confirmModal && confirmModal.isOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full animate-scale-up">
@@ -150,7 +151,7 @@ export default function CategoriesPage() {
             type="button"
             onClick={() => {
               setEditingId(null);
-              setName('');
+              setNamaKategori('');
               setError(null);
               setModalOpen(true);
             }}
@@ -172,13 +173,11 @@ export default function CategoriesPage() {
             </thead>
             <tbody className="divide-y divide-slate-50 bg-white">
               {categories.map((category) => (
-                <tr key={category.id} className="hover:bg-brand-accent/5 transition-colors duration-200 group">
-                  <td className="py-4 pl-6 font-bold text-brand-dark text-base">
-                    {category.name}
-                  </td>
+                <tr key={category.id_kategori} className="hover:bg-brand-accent/5 transition-colors duration-200 group">
+                  <td className="py-4 pl-6 font-bold text-brand-dark text-base">{category.nama_kategori}</td>
                   <td className="py-4">
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-brand-accent/10 text-brand-dark border border-brand-accent/20">
-                      {category.menu_count || 0} Menu
+                      {category.jumlah_menu || 0} Menu
                     </span>
                   </td>
                   <td className="py-4 text-right pr-6 space-x-4">
@@ -224,11 +223,11 @@ export default function CategoriesPage() {
                 setModalOpen(false);
                 setTimeout(() => {
                   setEditingId(null);
-                  setName('');
+                  setNamaKategori('');
                   setError(null);
                 }, 200);
               }}
-              className="absolute top-4 right-4 h-8 w-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200"
+              className="absolute top-4 right-4 h-8 w-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify center hover:bg-slate-200"
             >
               <i className="fas fa-times"></i>
             </button>
@@ -241,8 +240,8 @@ export default function CategoriesPage() {
               <label className="text-sm font-semibold text-slate-600 flex flex-col">
                 Nama Kategori
                 <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={namaKategori}
+                  onChange={(e) => setNamaKategori(e.target.value)}
                   className="mt-1 rounded-xl border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-brand-accent focus:border-brand-accent"
                   placeholder="Contoh: Coffee"
                 />
@@ -255,7 +254,7 @@ export default function CategoriesPage() {
                     setModalOpen(false);
                     setTimeout(() => {
                       setEditingId(null);
-                      setName('');
+                      setNamaKategori('');
                       setError(null);
                     }, 200);
                   }}
@@ -266,7 +265,7 @@ export default function CategoriesPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving || !name.trim()}
+                  disabled={saving || !namaKategori.trim()}
                   className="inline-flex items-center gap-2 bg-brand-accent hover:bg-[#ffe08c] text-brand-dark font-semibold px-5 py-2 rounded-xl transition-colors disabled:opacity-60"
                 >
                   {saving ? (
@@ -291,4 +290,3 @@ export default function CategoriesPage() {
     </AdminLayout>
   );
 }
-

@@ -1,12 +1,11 @@
 ﻿/* eslint-disable @next/next/no-img-element */
-/* eslint-disable react-hooks/set-state-in-effect */
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency } from '@/lib/format';
 import { clearOrderSuccess, OrderSuccessPayload, readOrderSuccess } from '@/lib/orderSuccess';
 import { publicGet, publicPost } from '@/lib/api';
-import { Order } from '@/types/entities';
+import { Pesanan } from '@/types/entities';
 
 const MERCHANT_ID = process.env.NEXT_PUBLIC_QRIS_MERCHANT_ID ?? '9988123';
 
@@ -14,10 +13,8 @@ export default function OrderSuccessPage() {
   const router = useRouter();
   const [payload, setPayload] = useState<OrderSuccessPayload | null>(null);
   const [checked, setChecked] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [gatewayOpened, setGatewayOpened] = useState(false);
   const [markPaidState, setMarkPaidState] = useState<'idle' | 'loading' | 'completed'>('idle');
-  const receiptGeneratedRef = useRef(false);
 
   useEffect(() => {
     if (!payload) {
@@ -29,15 +26,12 @@ export default function OrderSuccessPage() {
     }
 
     let mounted = true;
-    let intervalId: NodeJS.Timeout;
-
     const fetchLatestStatus = async () => {
       if (!payload) {
         return;
       }
       try {
-        setRefreshing(true);
-        const latest = await publicGet<Order>(`/public/orders/${payload.orderId}`);
+        const latest = await publicGet<Pesanan>(`/public/orders/${payload.orderId}`);
         if (!mounted) {
           return;
         }
@@ -47,28 +41,22 @@ export default function OrderSuccessPage() {
           }
           const nextState = {
             ...current,
-            paymentStatus: latest.payment_status,
-            orderStatus: latest.order_status,
+            paymentStatus: latest.status_pembayaran,
+            orderStatus: latest.status_pesanan,
           };
           return nextState;
         });
-      } catch (error) {
+      } catch {
         // silent fail, will retry
-      } finally {
-        if (mounted) {
-          setRefreshing(false);
-        }
       }
     };
 
     fetchLatestStatus();
-    intervalId = setInterval(fetchLatestStatus, 5000);
+    const intervalId = setInterval(fetchLatestStatus, 5000);
 
     return () => {
       mounted = false;
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
+      clearInterval(intervalId);
     };
   }, [payload]);
 
@@ -115,30 +103,6 @@ export default function OrderSuccessPage() {
     }
   };
 
-  const kitchenStatusText = useMemo(() => {
-    const status = payload?.orderStatus ?? 'baru';
-    if (status === 'selesai') {
-      return 'Hidangan telah diantar ke meja pelanggan dan transaksi dinyatakan selesai.';
-    }
-    if (status === 'diproses') {
-      return 'Dapur sedang menyiapkan menu sesuai detail pesanan yang sudah terverifikasi.';
-    }
-    return 'Setelah pembayaran diverifikasi, tim dapur segera menyiapkan dan mengantar menu ke meja pelanggan.';
-  }, [payload?.orderStatus]);
-
-  const adminNotificationEntries = useMemo(() => {
-    if (!payload) {
-      return [];
-    }
-    return [
-      { label: 'Nomor Pesanan', value: payload.orderCode },
-      { label: 'Nama Pelanggan', value: payload.customerName },
-      { label: 'Nomor Meja', value: payload.tableNumber },
-      { label: 'Total Pembayaran', value: formatCurrency(payload.total) },
-      { label: 'Metode Pembayaran', value: payload.paymentMethod === 'qris' ? 'QRIS' : 'Tunai' },
-      { label: 'Status Pesanan', value: readableOrderStatus(payload.orderStatus) },
-    ];
-  }, [payload]);
   const handleBackToMenu = () => {
     clearOrderSuccess();
     router.replace('/order');
@@ -330,7 +294,7 @@ export default function OrderSuccessPage() {
 
     const markPaid = async () => {
       try {
-        const response = await publicPost<{ order: Order }>(`/public/orders/${payload.orderId}/mark-paid`);
+        const response = await publicPost<{ order: Pesanan }>(`/public/orders/${payload.orderId}/mark-paid`);
         if (cancelled) {
           return;
         }
@@ -340,8 +304,8 @@ export default function OrderSuccessPage() {
           }
           return {
             ...current,
-            paymentStatus: response.order.payment_status,
-            orderStatus: response.order.order_status,
+            paymentStatus: response.order.status_pembayaran,
+            orderStatus: response.order.status_pesanan,
           };
         });
       } catch (error) {
