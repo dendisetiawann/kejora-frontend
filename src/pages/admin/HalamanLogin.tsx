@@ -4,12 +4,23 @@ import { FormEvent, useState } from 'react';
 import { adminLogin, setToken } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errors';
 
-export default function AdminLoginPage() {
+export default function HalamanLogin() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const tampilNotifikasi = () => {
+    if (!error) {
+      return null;
+    }
+    return (
+      <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-600">
+        {error}
+      </div>
+    );
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -24,7 +35,7 @@ export default function AdminLoginPage() {
     try {
       const response = await adminLogin({ username, password });
       setToken(response.token);
-      router.replace('/admin/dashboard');
+      router.replace('/admin/HalamanDashboard');
     } catch (err: unknown) {
       setError(extractErrorMessage(err, 'Username atau password salah.'));
     } finally {
@@ -32,7 +43,7 @@ export default function AdminLoginPage() {
     }
   };
 
-  return (
+  const tampilHalamanLogin = () => (
     <>
       <Head>
         <title>Login Admin • KejoraCash</title>
@@ -48,11 +59,7 @@ export default function AdminLoginPage() {
             <p className="text-sm text-slate-500">Masuk untuk mengelola pesanan.</p>
           </div>
 
-          {error && (
-            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-600">
-              {error}
-            </div>
-          )}
+          {tampilNotifikasi()}
 
           <label className="flex flex-col text-sm font-semibold text-brand-dark/80">
             Username
@@ -86,5 +93,7 @@ export default function AdminLoginPage() {
       </div>
     </>
   );
+
+  return tampilHalamanLogin();
 }
 

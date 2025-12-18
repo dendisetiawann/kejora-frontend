@@ -32,14 +32,13 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <Link
               href="/order"
-              className="group relative px-8 py-4 rounded-full bg-brand-DEFAULT text-white font-semibold shadow-xl shadow-brand-DEFAULT/20 hover:bg-brand-dark transition-all duration-300 hover:-translate-y-1 overflow-hidden"
+              className="px-8 py-4 rounded-full border-2 border-black bg-white text-brand-dark font-semibold"
             >
-              <span className="relative z-10">Mulai Pesan</span>
-              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+              Mulai Pesan
             </Link>
             <Link
-              href="/admin/login"
-              className="px-8 py-4 rounded-full border-2 border-brand-dark/10 text-brand-dark font-semibold hover:bg-white hover:border-brand-dark hover:shadow-lg transition-all duration-300"
+              href="/admin/HalamanLogin"
+              className="px-8 py-4 rounded-full border-2 border-black bg-white text-brand-dark font-semibold"
             >
               Masuk Admin
             </Link>

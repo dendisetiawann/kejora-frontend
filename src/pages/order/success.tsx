@@ -157,7 +157,7 @@ export default function OrderSuccessPage() {
     const generateReceipt = async () => {
       try {
         const { jsPDF } = await import('jspdf');
-        // Create a PDF with A6 size (105mm x 148mm) which is a good receipt size.
+        // Create a PDF with A6 size (105mm x 148mm)
         const doc = new jsPDF({
           orientation: 'portrait',
           unit: 'mm',
@@ -166,97 +166,123 @@ export default function OrderSuccessPage() {
 
         const pageWidth = doc.internal.pageSize.getWidth();
         const centerX = pageWidth / 2;
+        const margin = 6;
         let y = 10;
-        const lineHeight = 5;
-        const dashedLine = '------------------------------------------------';
 
-        // Helper for centered text
-        const centerText = (text: string, yPos: number, size: number = 10, font: string = 'helvetica', style: string = 'normal') => {
-          doc.setFont(font, style);
-          doc.setFontSize(size);
-          doc.text(text, centerX, yPos, { align: 'center' });
+        // Styling helpers
+        const drawDashedLine = (yPos: number) => {
+          doc.setLineWidth(0.1);
+          (doc as any).setLineDash([1, 1], 0);
+          doc.line(margin, yPos, pageWidth - margin, yPos);
+          (doc as any).setLineDash([], 0); // reset
         };
 
-        // Helper for left-right text
-        const rowText = (left: string, right: string, yPos: number, size: number = 9) => {
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(size);
-          doc.text(left, 5, yPos);
-          doc.text(right, pageWidth - 5, yPos, { align: 'right' });
+        const drawSolidLine = (yPos: number) => {
+          doc.setLineWidth(0.2);
+          (doc as any).setLineDash([], 0);
+          doc.line(margin, yPos, pageWidth - margin, yPos);
         };
 
-        // Header
-        centerText('CAFE KEJORA', y, 14, 'helvetica', 'bold');
-        y += lineHeight + 2;
-        centerText('Jl. Raya Puncak No. 123', y, 8);
-        y += lineHeight;
-        centerText('Telp: 0812-3456-7890', y, 8);
-        y += lineHeight + 2;
+        // -- HEADER --
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text('CAFE KEJORA', centerX, y, { align: 'center' });
+        y += 6;
 
-        centerText(dashedLine, y, 8);
-        y += lineHeight;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        const address = 'Jl. Letnan Boyak, Bangkinang, Kec. Bangkinang, Kabupaten Kampar, Riau';
+        const addressLines = doc.splitTextToSize(address, pageWidth - (margin * 2));
+        doc.text(addressLines, centerX, y, { align: 'center' });
+        y += (addressLines.length * 3.5) + 1;
 
-        // Order Info
-        rowText(`Order: ${payload.orderCode}`, new Date(payload.createdAt).toLocaleDateString('id-ID'), y);
-        y += lineHeight;
-        rowText(`Meja: ${payload.tableNumber}`, new Date(payload.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }), y);
-        y += lineHeight;
-        rowText(`Pelanggan: ${payload.customerName}`, '', y);
-        y += lineHeight + 2;
+        doc.text('Telp: 0838-9627-7278', centerX, y, { align: 'center' });
+        y += 5;
 
-        centerText(dashedLine, y, 8);
-        y += lineHeight;
+        drawSolidLine(y);
+        y += 4;
 
-        // Items
+        // -- ORDER INFO --
+        doc.setFontSize(9);
+        doc.text(`No. Order: ${payload.orderCode}`, margin, y);
+        doc.text(new Date(payload.createdAt).toLocaleDateString('id-ID'), pageWidth - margin, y, { align: 'right' });
+        y += 4.5;
+        
+        doc.text(`Meja: ${payload.tableNumber}`, margin, y);
+        doc.text(new Date(payload.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }), pageWidth - margin, y, { align: 'right' });
+        y += 4.5;
+
+        doc.text(`Pelanggan: ${payload.customerName}`, margin, y);
+        y += 5;
+
+        drawDashedLine(y);
+        y += 4;
+
+        // -- ITEMS --
+        doc.setFontSize(9);
         payload.items.forEach((item) => {
           doc.setFont('helvetica', 'bold');
-          doc.setFontSize(9);
-          doc.text(item.name, 5, y);
-          y += lineHeight;
+          doc.text(item.name, margin, y);
+          y += 4;
 
-          rowText(`${item.qty} x ${formatCurrency(item.price)}`, formatCurrency(item.qty * item.price), y);
-          y += lineHeight;
+          doc.setFont('helvetica', 'normal');
+          const priceStr = `${item.qty} x ${formatCurrency(item.price)}`;
+          const totalStr = formatCurrency(item.qty * item.price);
+
+          doc.text(priceStr, margin + 4, y);
+          doc.text(totalStr, pageWidth - margin, y, { align: 'right' });
+          y += 4.5;
 
           if (item.note) {
-            doc.setFont('helvetica', 'italic');
             doc.setFontSize(8);
-            doc.text(`(Catatan: ${item.note})`, 8, y);
-            y += lineHeight;
+            doc.setTextColor(100);
+            doc.text(`(${item.note})`, margin + 4, y);
+            doc.setTextColor(0);
+            doc.setFontSize(9);
+            y += 4;
           }
-          y += 2; // Extra spacing between items
+          y += 1.5; // spacing between items
         });
 
-        centerText(dashedLine, y, 8);
-        y += lineHeight;
+        drawSolidLine(y);
+        y += 4;
 
-        // Totals
+        // -- TOTALS --
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        rowText('TOTAL', formatCurrency(payload.total), y, 12);
-        y += lineHeight + 2;
+        doc.text('TOTAL', margin, y);
+        doc.text(formatCurrency(payload.total), pageWidth - margin, y, { align: 'right' });
+        y += 6;
 
-        rowText('Metode Bayar', payload.paymentMethod === 'qris' ? 'QRIS' : 'Tunai', y);
-        y += lineHeight;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text('Metode Pembayaran', margin, y);
+        doc.text(payload.paymentMethod === 'qris' ? 'QRIS' : 'Tunai', pageWidth - margin, y, { align: 'right' });
+        y += 5;
 
-        // Status Logic
+        doc.text('Status', margin, y);
         const isPaid = currentStatus === 'PAID';
-        const statusLabel = isPaid ? 'LUNAS' : 'MENUNGGU PEMBAYARAN';
-
-        rowText('Status', statusLabel, y);
-        y += lineHeight + 4;
-
-        // Footer
-        centerText('Terima Kasih', y, 10, 'helvetica', 'bold');
-        y += lineHeight;
-
-        if (!isPaid && payload.paymentMethod === 'cash') {
-          centerText('Silakan tunjukkan struk ini', y, 9);
-          y += lineHeight;
-          centerText('ke kasir untuk pembayaran', y, 9);
+        const statusLabel = isPaid ? 'LUNAS' : 'BELUM LUNAS';
+        
+        if (isPaid) {
+            doc.setTextColor(0, 128, 0); // Green
         } else {
-          centerText('Silakan Datang Kembali', y, 8);
-          y += lineHeight;
-          centerText('Wifi: KejoraFree / Pass: kopi123', y, 8);
+            doc.setTextColor(200, 0, 0); // Red
         }
+        doc.setFont('helvetica', 'bold');
+        doc.text(statusLabel, pageWidth - margin, y, { align: 'right' });
+        doc.setTextColor(0); // Reset
+        y += 8;
+
+        // -- FOOTER --
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(9);
+        doc.text('Terima kasih atas kunjungan Anda!', centerX, y, { align: 'center' });
+        y += 4.5;
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.text('Wifi: KejoraFree / Pass: kopi123', centerX, y, { align: 'center' });
 
         const fileName = isPaid ? `Struk-Lunas-${payload.orderCode}.pdf` : `Struk-Tagihan-${payload.orderCode}.pdf`;
         doc.save(fileName);
@@ -542,7 +568,7 @@ export default function OrderSuccessPage() {
             <button
               type="button"
               onClick={handleBackToMenu}
-              className="px-8 py-4 rounded-full bg-gradient-to-r from-gray-900 to-gray-800 text-white font-bold shadow-lg shadow-gray-900/20 hover:shadow-xl hover:scale-[1.02] transition-all active:scale-95"
+              className="px-8 py-4 rounded-full bg-gray-900 text-white font-bold"
             >
               Kembali ke Menu Utama
             </button>

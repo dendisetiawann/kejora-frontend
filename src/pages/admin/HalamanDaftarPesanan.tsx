@@ -8,7 +8,7 @@ import { Pesanan } from '@/types/entities';
 
 type HistoryFilter = 'today' | 'week' | 'month' | 'year' | 'custom';
 
-export default function KelolaPesananPage() {
+export default function HalamanDaftarPesanan() {
   const [orders, setOrders] = useState<Pesanan[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
@@ -131,7 +131,7 @@ export default function KelolaPesananPage() {
     return acc;
   }, 0);
 
-  return (
+  const tampilHalamanDaftarPesanan = () => (
     <AdminLayout title="Kelola Pesanan">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -235,8 +235,11 @@ export default function KelolaPesananPage() {
                   <td className="px-6 py-4">{getStatusBadge(order)}</td>
                   <td className="px-6 py-4 text-right">
                     <Link
-                      href={`/admin/kelolapesanan/${order.id_pesanan}`}
-                      className="inline-flex items-center px-3 py-1.5 border border-brand-accent text-brand-accent rounded-lg text-xs font-bold hover:bg-brand-accent hover:text-brand-dark transition-colors"
+                      href={{
+                        pathname: '/admin/kelolapesanan/HalamanDetailPesanan',
+                        query: { id: order.id_pesanan },
+                      }}
+                      className="inline-flex items-center px-4 py-2 rounded-xl border border-brand-accent text-brand-accent text-xs font-bold"
                     >
                       Lihat Detail
                     </Link>
@@ -262,4 +265,6 @@ export default function KelolaPesananPage() {
       </div>
     </AdminLayout>
   );
+
+  return tampilHalamanDaftarPesanan();
 }

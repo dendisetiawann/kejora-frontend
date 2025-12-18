@@ -43,14 +43,27 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            // Check for new orders (id not in previous list)
+            // Check for new orders (id not in previous list) - includes QRIS orders that just got paid
             const newOrders = data.filter(
-                (o) => !previousOrdersRef.current.find((prev) => prev.id_pesanan === o.id_pesanan) && o.status_pesanan === 'baru'
+                (o) => !previousOrdersRef.current.find((prev) => prev.id_pesanan === o.id_pesanan)
             );
 
-            if (newOrders.length > 0) {
-                setUnreadCount((prev) => prev + newOrders.length);
-                setLatestOrder(newOrders[0]);
+            // Also check for QRIS orders that just got paid (not cash - cash notif only on new order)
+            const justPaidOrders = data.filter(
+                (o) => {
+                    const prevOrder = previousOrdersRef.current.find((prev) => prev.id_pesanan === o.id_pesanan);
+                    return prevOrder && 
+                           prevOrder.status_pembayaran !== 'dibayar' && 
+                           o.status_pembayaran === 'dibayar' &&
+                           o.metode_pembayaran === 'qris';
+                }
+            );
+
+            const allNewOrders = [...newOrders, ...justPaidOrders];
+
+            if (allNewOrders.length > 0) {
+                setUnreadCount((prev) => prev + allNewOrders.length);
+                setLatestOrder(allNewOrders[0]);
                 setShowBanner(true);
                 playSound();
 
@@ -68,12 +81,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         // Only poll on admin pages and not on login
-        if (!router.pathname.startsWith('/admin') || router.pathname === '/admin/login') {
+        if (!router.pathname.startsWith('/admin') || router.pathname === '/admin/HalamanLogin') {
             return;
         }
 
-        // Poll every 10 seconds
-        const interval = setInterval(fetchOrders, 10000);
+        // Poll every 5 seconds for faster real-time updates
+        const interval = setInterval(fetchOrders, 5000);
         fetchOrders();
         return () => clearInterval(interval);
     }, [router.pathname, fetchOrders]);

@@ -12,10 +12,10 @@ type Props = {
 };
 
 const navItems = [
-  { label: 'Dashboard', href: '/admin/dashboard', icon: 'fa-tachometer-alt' },
-  { label: 'Kelola Pesanan', href: '/admin/kelolapesanan', icon: 'fa-clipboard-list' },
-  { label: 'Kelola Menu', href: '/admin/kelolamenu', icon: 'fa-utensils' },
-  { label: 'Kelola Kategori', href: '/admin/kelolakategori', icon: 'fa-layer-group' },
+  { label: 'Dashboard', href: '/admin/HalamanDashboard', icon: 'fa-tachometer-alt' },
+  { label: 'Kelola Pesanan', href: '/admin/HalamanDaftarPesanan', icon: 'fa-clipboard-list' },
+  { label: 'Kelola Menu', href: '/admin/HalamanDaftarMenu', icon: 'fa-utensils' },
+  { label: 'Kelola Kategori', href: '/admin/HalamanDaftarKategori', icon: 'fa-layer-group' },
 ];
 
 export default function AdminLayout({ title, children }: Props) {
@@ -44,7 +44,7 @@ export default function AdminLayout({ title, children }: Props) {
   useEffect(() => {
     const token = getToken();
     if (!token) {
-      router.replace('/admin/login');
+      router.replace('/admin/HalamanLogin');
       return;
     }
 
@@ -52,7 +52,7 @@ export default function AdminLayout({ title, children }: Props) {
       .then(setUser)
       .catch(() => {
         clearToken();
-        router.replace('/admin/login');
+        router.replace('/admin/HalamanLogin');
       })
       .finally(() => setLoading(false));
   }, [router]);
@@ -91,7 +91,7 @@ export default function AdminLayout({ title, children }: Props) {
                 </p>
                 <div className="mt-2 flex gap-3">
                   <Link
-                    href={`/admin/kelolapesanan/${latestOrder.id_pesanan}`}
+                    href={`/admin/kelolapesanan/HalamanDetailPesanan?id=${latestOrder.id_pesanan}`}
                     onClick={dismissBanner}
                     className="text-xs font-semibold text-brand-accent hover:text-brand-dark transition-colors"
                   >
@@ -117,7 +117,7 @@ export default function AdminLayout({ title, children }: Props) {
 
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-30">
           <div className="flex items-center gap-3">
-            <Link href="/admin/dashboard" className="text-xl font-bold text-brand-dark hover:text-brand-DEFAULT transition-colors">
+            <Link href="/admin/HalamanDashboard" className="text-xl font-bold text-brand-dark hover:text-brand-DEFAULT transition-colors">
               KejoraCash <span className="text-brand-accent font-normal text-sm">Admin</span>
             </Link>
           </div>
@@ -155,7 +155,7 @@ export default function AdminLayout({ title, children }: Props) {
                   <div className="max-h-64 overflow-y-auto">
                     {unreadCount > 0 ? (
                       <div className="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => {
-                        router.push('/admin/kelolapesanan');
+                        router.push('/admin/HalamanDaftarPesanan');
                         setIsNotificationOpen(false);
                       }}>
                         <div className="flex gap-3">
@@ -182,7 +182,7 @@ export default function AdminLayout({ title, children }: Props) {
                   {unreadCount > 0 && (
                     <div className="border-t border-gray-100 p-2">
                       <Link
-                        href="/admin/kelolapesanan"
+                        href="/admin/HalamanDaftarPesanan"
                         onClick={() => setIsNotificationOpen(false)}
                         className="block w-full text-center py-2 text-xs font-semibold text-brand-dark hover:bg-gray-50 rounded-lg transition-colors"
                       >
@@ -200,7 +200,7 @@ export default function AdminLayout({ title, children }: Props) {
               <button
                 id="admin-menu-button"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="h-10 w-10 rounded-full hover:bg-gray-100 flex items-center justify-center text-brand-dark transition-colors focus:outline-none focus:ring-2 focus:ring-brand-accent/50"
+                className="h-10 w-10 rounded-full flex items-center justify-center text-brand-dark focus:outline-none"
               >
                 <i className="fas fa-list-ul text-lg"></i>
               </button>
@@ -216,29 +216,31 @@ export default function AdminLayout({ title, children }: Props) {
                   </div>
 
                   <div className="py-1">
-                    {navItems.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className={`flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors ${router.pathname === item.href ? 'text-brand-accent font-semibold bg-brand-accent/5' : 'text-gray-700'
-                          }`}
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        <div className={`w-6 flex justify-center ${router.pathname === item.href ? 'text-brand-accent' : 'text-gray-400'}`}>
-                          <i className={`fas ${item.icon}`}></i>
-                        </div>
-                        {item.label}
-                      </Link>
-                    ))}
+                    {navItems.map((item) => {
+                      const isActive = router.pathname === item.href;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={`flex items-center gap-3 px-4 py-2.5 text-sm ${isActive ? 'text-brand-accent font-semibold bg-brand-accent/5' : 'text-gray-700'}`}
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          <div className={`w-6 flex justify-center ${isActive ? 'text-brand-accent' : 'text-gray-400'}`}>
+                            <i className={`fas ${item.icon}`}></i>
+                          </div>
+                          {item.label}
+                        </Link>
+                      );
+                    })}
                   </div>
 
                   <div className="border-t border-gray-100 mt-1 pt-1">
                     <button
                       onClick={() => {
                         clearToken();
-                        router.replace('/admin/login');
+                        router.replace('/admin/HalamanLogin');
                       }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium flex items-center gap-3"
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 font-medium flex items-center gap-3"
                     >
                       <div className="w-6 flex justify-center text-red-500">
                         <i className="fas fa-sign-out-alt"></i>
