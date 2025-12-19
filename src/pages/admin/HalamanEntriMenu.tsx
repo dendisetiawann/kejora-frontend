@@ -37,7 +37,17 @@ type HalamanEntriMenuProps = {
 };
 
 const renderFormMenu = (modeTitle: string, props: HalamanEntriMenuProps) => {
-  const { form, categories, error, saving, photoPreview, setForm, setPhotoPreview, onClose, onSubmit } = props;
+  const {
+    form = defaultMenuForm,
+    categories = [],
+    error,
+    saving,
+    photoPreview,
+    setForm,
+    setPhotoPreview,
+    onClose,
+    onSubmit,
+  } = props;
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -67,7 +77,7 @@ const renderFormMenu = (modeTitle: string, props: HalamanEntriMenuProps) => {
             Nama Menu
             <input
               type="text"
-              value={form.nama_menu}
+              value={form.nama_menu ?? ''}
               onChange={(e) => setForm((prev) => ({ ...prev, nama_menu: e.target.value }))}
               className="rounded-xl border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-brand-accent focus:border-brand-accent"
               placeholder="Es Kopi Susu"
@@ -76,7 +86,7 @@ const renderFormMenu = (modeTitle: string, props: HalamanEntriMenuProps) => {
           <label className="flex flex-col gap-2 text-sm font-semibold text-brand-dark/80">
             Kategori
             <select
-              value={form.id_kategori}
+              value={form.id_kategori ?? ''}
               onChange={(e) => setForm((prev) => ({ ...prev, id_kategori: e.target.value }))}
               className="rounded-xl border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-brand-accent focus:border-brand-accent"
             >
@@ -92,7 +102,7 @@ const renderFormMenu = (modeTitle: string, props: HalamanEntriMenuProps) => {
         <label className="flex flex-col gap-2 text-sm font-semibold text-brand-dark/80">
           Deskripsi Menu
           <textarea
-            value={form.deskripsi_menu}
+            value={form.deskripsi_menu ?? ''}
             onChange={(e) => setForm((prev) => ({ ...prev, deskripsi_menu: e.target.value }))}
             className="rounded-xl border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-brand-accent focus:border-brand-accent min-h-[100px]"
             placeholder="Deskripsi singkat menu"
@@ -103,7 +113,7 @@ const renderFormMenu = (modeTitle: string, props: HalamanEntriMenuProps) => {
             Harga Menu
             <input
               type="number"
-              value={form.harga_menu}
+              value={form.harga_menu ?? ''}
               onChange={(e) => setForm((prev) => ({ ...prev, harga_menu: e.target.value }))}
               className="rounded-xl border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-brand-accent focus:border-brand-accent"
               placeholder="25000"
@@ -112,7 +122,10 @@ const renderFormMenu = (modeTitle: string, props: HalamanEntriMenuProps) => {
           <label className="flex flex-col gap-2 text-sm font-semibold text-brand-dark/80">
             Status Visibilitas
             <div className="flex items-center gap-3">
-              <ToggleSwitch checked={form.status_visibilitas} onChange={() => setForm((prev) => ({ ...prev, status_visibilitas: !prev.status_visibilitas }))} />
+              <ToggleSwitch
+                checked={!!form.status_visibilitas}
+                onChange={() => setForm((prev) => ({ ...prev, status_visibilitas: !prev.status_visibilitas }))}
+              />
               <span className="text-sm font-medium text-slate-500">{form.status_visibilitas ? 'Tampil ke pelanggan' : 'Sembunyikan'}</span>
             </div>
           </label>
@@ -169,6 +182,10 @@ const renderFormMenu = (modeTitle: string, props: HalamanEntriMenuProps) => {
 export const tampilHalamanTambahMenu = (props: HalamanEntriMenuProps) => renderFormMenu('Tambah Menu', props);
 export const tampilHalamanEditMenu = (props: HalamanEntriMenuProps) => renderFormMenu('Edit Menu', props);
 
-export default function HalamanEntriMenu(props: HalamanEntriMenuProps) {
-  return props.form.id_menu ? tampilHalamanEditMenu(props) : tampilHalamanTambahMenu(props);
+export default function HalamanEntriMenu(props?: HalamanEntriMenuProps) {
+  if (!props) {
+    return null;
+  }
+
+  return props.form?.id_menu ? tampilHalamanEditMenu(props) : tampilHalamanTambahMenu(props);
 }

@@ -10,7 +10,7 @@ type HalamanEntriKategoriProps = {
 };
 
 const renderFormKategori = (modeTitle: string, props: HalamanEntriKategoriProps) => {
-  const { namaKategori, error, saving, setNamaKategori, onClose, onSubmit } = props;
+  const { namaKategori = '', error, saving, setNamaKategori, onClose, onSubmit } = props;
 
   return (
     <>
@@ -36,7 +36,7 @@ const renderFormKategori = (modeTitle: string, props: HalamanEntriKategoriProps)
           Nama Kategori
           <input
             type="text"
-            value={namaKategori}
+            value={namaKategori ?? ''}
             onChange={(e) => setNamaKategori(e.target.value)}
             className="rounded-xl border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-brand-accent focus:border-brand-accent"
             placeholder="Contoh: Coffee"
@@ -54,7 +54,7 @@ const renderFormKategori = (modeTitle: string, props: HalamanEntriKategoriProps)
           </button>
           <button
             type="submit"
-            disabled={saving || !namaKategori.trim()}
+            disabled={saving || !namaKategori?.trim()}
             className="flex items-center gap-2 bg-brand-accent text-brand-dark font-semibold px-5 py-2.5 rounded-xl transition-colors duration-200 hover:bg-yellow-400 focus-visible:ring-2 focus-visible:ring-brand-accent/60 disabled:opacity-60 shadow-lg shadow-brand-accent/20"
           >
             {saving ? (
@@ -80,7 +80,11 @@ const renderFormKategori = (modeTitle: string, props: HalamanEntriKategoriProps)
 export const tampilHalamanTambahKategori = (props: HalamanEntriKategoriProps) => renderFormKategori('Tambah Kategori', props);
 export const tampilHalamanEditKategori = (props: HalamanEntriKategoriProps) => renderFormKategori('Edit Kategori', props);
 
-export default function HalamanEntriKategori(props: HalamanEntriKategoriProps & { isEditMode: boolean }) {
+export default function HalamanEntriKategori(props?: HalamanEntriKategoriProps & { isEditMode: boolean }) {
+  if (!props) {
+    return null;
+  }
+
   const { isEditMode, ...rest } = props;
   return isEditMode ? tampilHalamanEditKategori(rest) : tampilHalamanTambahKategori(rest);
 }

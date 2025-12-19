@@ -86,5 +86,9 @@ const tampilHalamanDetailMenu = ({
 export { tampilHalamanDetailMenu };
 
 export default function HalamanDetailMenu(props: HalamanDetailMenuProps) {
+  if (!props?.menu) {
+    return null;
+  }
+
   return tampilHalamanDetailMenu(props);
 }
